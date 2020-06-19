@@ -100,7 +100,7 @@ func (targetKey ObliviousDNSPublicKey) EncryptQuery(query ObliviousDNSQuery) (Ob
 		return ObliviousDNSMessage{}, err
 	}
 
-	enc, ctxI, err := hpke.SetupBaseI(suite, rand.Reader, pkR, []byte("odns-query"))
+	enc, ctxI, err := hpke.SetupBaseS(suite, rand.Reader, pkR, []byte("odns-query"))
 	if err != nil {
 		return ObliviousDNSMessage{}, err
 	}
