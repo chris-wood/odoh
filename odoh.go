@@ -110,9 +110,9 @@ func (targetKey ObliviousDNSPublicKey) EncryptQuery(query ObliviousDNSQuery) (Ob
 	ct := ctxI.Seal(aad, encodedMessage)
 
 	return ObliviousDNSMessage{
-		messageType:      0x01,
-		keyID:            targetKey.KeyID(),
-		encryptedMessage: append(enc, ct...),
+		MessageType:      0x01,
+		KeyID:            targetKey.KeyID(),
+		EncryptedMessage: append(enc, ct...),
 	}, nil
 }
 
@@ -124,8 +124,8 @@ func (privateKey ObliviousDNSPrivateKey) DecryptQuery(message ObliviousDNSMessag
 
 	log.Printf("publicKey = %x\n", privateKey.publicKeyBytes)
 
-	enc := message.encryptedMessage[0:32]
-	ct := message.encryptedMessage[32:]
+	enc := message.EncryptedMessage[0:32]
+	ct := message.EncryptedMessage[32:]
 	log.Printf("enc = %x\n", enc)
 	log.Printf("ct = %x\n", ct)
 

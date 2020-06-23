@@ -39,13 +39,13 @@ const (
 )
 
 type ObliviousDNSQuery struct {
-	responseKey []byte
-	dnsMessage  []byte
+	ResponseKey []byte
+	DnsMessage  []byte
 }
 
 func (m ObliviousDNSQuery) Marshal() []byte {
-	result := encodeLengthPrefixedSlice(m.responseKey)
-	result = append(result, encodeLengthPrefixedSlice(m.dnsMessage)...)
+	result := encodeLengthPrefixedSlice(m.ResponseKey)
+	result = append(result, encodeLengthPrefixedSlice(m.DnsMessage)...)
 	return result
 }
 
@@ -64,18 +64,18 @@ func UnmarshalQueryBody(data []byte) (*ObliviousDNSQuery, error) {
 	message := data[2+keyLength+2 : 2+keyLength+2+messageLength]
 
 	return &ObliviousDNSQuery{
-		responseKey: key,
-		dnsMessage:  message,
+		ResponseKey: key,
+		DnsMessage:  message,
 	}, nil
 }
 
 func (m ObliviousDNSQuery) Message() []byte {
-	return m.dnsMessage
+	return m.DnsMessage
 }
 
 func (m ObliviousDNSQuery) EncryptResponse(suite hpke.CipherSuite, aad, response []byte) ([]byte, error) {
 	// TODO(caw): we need to support other ciphersuites, so dispatch on `suite`
-	block, err := aes.NewCipher(m.responseKey)
+	block, err := aes.NewCipher(m.ResponseKey)
 	if err != nil {
 		return nil, err
 	}
@@ -88,7 +88,7 @@ func (m ObliviousDNSQuery) EncryptResponse(suite hpke.CipherSuite, aad, response
 
 	ciphertext := aesgcm.Seal(nil, nonce, response, aad)
 
-	log.Printf("EncryptResponse key: %x\n", m.responseKey)
+	log.Printf("EncryptResponse key: %x\n", m.ResponseKey)
 	log.Printf("EncryptResponse nonce: %x\n", nonce)
 	log.Printf("EncryptResponse aad: %x\n", aad)
 	log.Printf("EncryptResponse plaintext: %x\n", response)
@@ -119,28 +119,28 @@ func (r ObliviousDNSResponse) DecryptResponse(suite hpke.CipherSuite, aad, respo
 }
 
 type ObliviousDNSMessage struct {
-	messageType      ObliviousMessageType
-	keyID            []byte
-	encryptedMessage []byte
+	MessageType      ObliviousMessageType
+	KeyID            []byte
+	EncryptedMessage []byte
 }
 
 func (m ObliviousDNSMessage) Type() ObliviousMessageType {
-	return m.messageType
+	return m.MessageType
 }
 
 func CreateObliviousDNSMessage(messageType ObliviousMessageType, keyID []byte, encryptedMessage []byte) *ObliviousDNSMessage {
 	return &ObliviousDNSMessage{
-		messageType:      messageType,
-		keyID:            keyID,
-		encryptedMessage: encryptedMessage,
+		MessageType:      messageType,
+		KeyID:            keyID,
+		EncryptedMessage: encryptedMessage,
 	}
 }
 
 func (m ObliviousDNSMessage) Marshal() []byte {
-	encodedKey := encodeLengthPrefixedSlice(m.keyID)
-	encodedMessage := encodeLengthPrefixedSlice(m.encryptedMessage)
+	encodedKey := encodeLengthPrefixedSlice(m.KeyID)
+	encodedMessage := encodeLengthPrefixedSlice(m.EncryptedMessage)
 
-	result := append([]byte{uint8(m.messageType)}, encodedKey...)
+	result := append([]byte{uint8(m.MessageType)}, encodedKey...)
 	result = append(result, encodedMessage...)
 
 	return result
@@ -162,8 +162,8 @@ func UnmarshalDNSMessage(data []byte) (*ObliviousDNSMessage, error) {
 	}
 
 	return &ObliviousDNSMessage{
-		messageType:      ObliviousMessageType(messageType),
-		keyID:            keyID,
-		encryptedMessage: encryptedMessage,
+		MessageType:      ObliviousMessageType(messageType),
+		KeyID:            keyID,
+		EncryptedMessage: encryptedMessage,
 	}, nil
 }
