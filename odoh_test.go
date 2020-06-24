@@ -36,8 +36,8 @@ func TestQueryBodyMarshal(t *testing.T) {
 	message := []byte{0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F}
 
 	queryBody := ObliviousDNSQuery{
-		responseKey: key,
-		dnsMessage:  message,
+		ResponseKey: key,
+		DnsMessage:  message,
 	}
 
 	encoded := queryBody.Marshal()
@@ -45,10 +45,10 @@ func TestQueryBodyMarshal(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Encode/decode failed")
 	}
-	if !bytes.Equal(decoded.responseKey, key) {
+	if !bytes.Equal(decoded.ResponseKey, key) {
 		t.Fatalf("Key mismatch")
 	}
-	if !bytes.Equal(decoded.dnsMessage, message) {
+	if !bytes.Equal(decoded.DnsMessage, message) {
 		t.Fatalf("Key mismatch")
 	}
 }
@@ -58,9 +58,9 @@ func TestDNSMessageMarshal(t *testing.T) {
 	encryptedMessage := []byte{0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F}
 
 	message := ObliviousDNSMessage{
-		messageType:      0x01,
-		keyID:            keyID,
-		encryptedMessage: encryptedMessage,
+		MessageType:      0x01,
+		KeyID:            keyID,
+		EncryptedMessage: encryptedMessage,
 	}
 
 	encoded := message.Marshal()
@@ -68,14 +68,14 @@ func TestDNSMessageMarshal(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Encode/decode failed")
 	}
-	if decoded.messageType != 0x01 {
-		t.Fatalf("messageType mismatch")
+	if decoded.MessageType != 0x01 {
+		t.Fatalf("MessageType mismatch")
 	}
-	if !bytes.Equal(decoded.keyID, keyID) {
-		t.Fatalf("keyID mismatch")
+	if !bytes.Equal(decoded.KeyID, keyID) {
+		t.Fatalf("KeyID mismatch")
 	}
-	if !bytes.Equal(decoded.encryptedMessage, encryptedMessage) {
-		t.Fatalf("encryptedMessage mismatch")
+	if !bytes.Equal(decoded.EncryptedMessage, encryptedMessage) {
+		t.Fatalf("EncryptedMessage mismatch")
 	}
 }
 
@@ -108,8 +108,8 @@ func TestQueryEncryption(t *testing.T) {
 	dnsMessage := []byte{0x01, 0x02}
 
 	message := ObliviousDNSQuery{
-		responseKey: symmetricKey,
-		dnsMessage:  dnsMessage,
+		ResponseKey: symmetricKey,
+		DnsMessage:  dnsMessage,
 	}
 
 	encryptedMessage, err := targetKey.EncryptQuery(message)
@@ -122,11 +122,11 @@ func TestQueryEncryption(t *testing.T) {
 		t.Fatalf("DecryptQuery failed: %s", err)
 	}
 
-	if !bytes.Equal(result.responseKey, symmetricKey) {
+	if !bytes.Equal(result.ResponseKey, symmetricKey) {
 		t.Fatalf("Incorrect key returned")
 	}
-	if !bytes.Equal(result.dnsMessage, dnsMessage) {
-		t.Fatalf("Incorrect dnsMessage returned")
+	if !bytes.Equal(result.DnsMessage, dnsMessage) {
+		t.Fatalf("Incorrect DnsMessage returned")
 	}
 }
 
@@ -178,8 +178,8 @@ func TestResponseEncryption(t *testing.T) {
 	responseData := []byte("fake response")
 
 	query := ObliviousDNSQuery{
-		responseKey: responseKey,
-		dnsMessage:  nil,
+		ResponseKey: responseKey,
+		DnsMessage:  nil,
 	}
 
 	encryptedResponse, err := query.EncryptResponse(suite, aad, responseData)
