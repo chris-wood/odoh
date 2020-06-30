@@ -98,12 +98,12 @@ func (m ObliviousDNSQuery) EncryptResponse(suite hpke.CipherSuite, aad, response
 }
 
 type ObliviousDNSResponse struct {
-	responseKey []byte
+	ResponseKey []byte
 }
 
 func (r ObliviousDNSResponse) DecryptResponse(suite hpke.CipherSuite, aad, response []byte) ([]byte, error) {
 	// TODO(caw): we need to support other ciphersuites, so dispatch on `suite`
-	block, err := aes.NewCipher(r.responseKey)
+	block, err := aes.NewCipher(r.ResponseKey)
 	if err != nil {
 		return nil, err
 	}

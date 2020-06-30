@@ -95,10 +95,10 @@ func TestQueryEncryption(t *testing.T) {
 	}
 
 	targetKey := ObliviousDNSPublicKey{
-		kemID:          kemID,
-		kdfID:          kdfID,
-		aeadID:         aeadID,
-		publicKeyBytes: suite.KEM.Marshal(pkR),
+		KemID:          kemID,
+		KdfID:          kdfID,
+		AeadID:         aeadID,
+		PublicKeyBytes: suite.KEM.Marshal(pkR),
 	}
 
 	privateKey := ObliviousDNSPrivateKey{targetKey, skR}
@@ -131,7 +131,7 @@ func TestQueryEncryption(t *testing.T) {
 }
 
 func TestKeyID(t *testing.T) {
-	expectedKeyId := "002069a9f5371fecdb54b589d9f6ead2b22ef91257be6297b135536bc0f978fca709"
+	expectedKeyId := "002050106dbb316e7bf98bc862fd71e131d28cd871a11af84b19f323e465f32f1006"
 	expectedKeyIdBytes, err := hex.DecodeString(expectedKeyId)
 	if err != nil {
 		t.Fatal("Failed to decode AAD")
@@ -147,10 +147,10 @@ func TestKeyID(t *testing.T) {
 	kdfID := hpke.KDF_HKDF_SHA256
 	aeadID := hpke.AEAD_AESGCM128
 	odohKey := ObliviousDNSPublicKey{
-		kemID:          kemID,
-		kdfID:          kdfID,
-		aeadID:         aeadID,
-		publicKeyBytes: publicKeyBytes,
+		KemID:          kemID,
+		KdfID:          kdfID,
+		AeadID:         aeadID,
+		PublicKeyBytes: publicKeyBytes,
 	}
 
 	keyId := odohKey.KeyID()
@@ -188,7 +188,7 @@ func TestResponseEncryption(t *testing.T) {
 	}
 
 	response := ObliviousDNSResponse{
-		responseKey: responseKey,
+		ResponseKey: responseKey,
 	}
 
 	decryptedResponse, err := response.DecryptResponse(suite, aad, encryptedResponse)
