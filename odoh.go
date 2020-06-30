@@ -31,21 +31,21 @@ import (
 )
 
 type ObliviousDNSPublicKey struct {
-	kemID          hpke.KEMID
-	kdfID          hpke.KDFID
-	aeadID         hpke.AEADID
-	publicKeyBytes []byte
+	KemID          hpke.KEMID
+	KdfID          hpke.KDFID
+	AeadID         hpke.AEADID
+	PublicKeyBytes []byte
 }
 
 func (k ObliviousDNSPublicKey) KeyID() []byte {
 	h := sha256.New()
 
 	identifiers := make([]byte, 8)
-	binary.BigEndian.PutUint16(identifiers[0:], uint16(k.kemID))
-	binary.BigEndian.PutUint16(identifiers[2:], uint16(k.kdfID))
-	binary.BigEndian.PutUint16(identifiers[4:], uint16(k.aeadID))
-	binary.BigEndian.PutUint16(identifiers[6:], uint16(len(k.publicKeyBytes)))
-	message := append(identifiers, k.publicKeyBytes...)
+	binary.BigEndian.PutUint16(identifiers[0:], uint16(k.KemID))
+	binary.BigEndian.PutUint16(identifiers[2:], uint16(k.KdfID))
+	binary.BigEndian.PutUint16(identifiers[4:], uint16(k.AeadID))
+	binary.BigEndian.PutUint16(identifiers[6:], uint16(len(k.PublicKeyBytes)))
+	message := append(identifiers, k.PublicKeyBytes...)
 
 	h.Write(message)
 	keyIdHash := h.Sum(nil)
@@ -55,17 +55,21 @@ func (k ObliviousDNSPublicKey) KeyID() []byte {
 	return append(result, keyIdHash...)
 }
 
+func (k ObliviousDNSPublicKey) GetPublicKeyBytes() []byte {
+	return k.PublicKeyBytes
+}
+
 func (k ObliviousDNSPublicKey) CipherSuite() (hpke.CipherSuite, error) {
-	return hpke.AssembleCipherSuite(k.kemID, k.kdfID, k.aeadID)
+	return hpke.AssembleCipherSuite(k.KemID, k.KdfID, k.AeadID)
 }
 
 type ObliviousDNSPrivateKey struct {
-	publicKey ObliviousDNSPublicKey
-	secretKey hpke.KEMPrivateKey
+	PublicKey ObliviousDNSPublicKey
+	SecretKey hpke.KEMPrivateKey
 }
 
 func (k ObliviousDNSPrivateKey) CipherSuite() (hpke.CipherSuite, error) {
-	return hpke.AssembleCipherSuite(k.publicKey.kemID, k.publicKey.kdfID, k.publicKey.aeadID)
+	return hpke.AssembleCipherSuite(k.PublicKey.KemID, k.PublicKey.KdfID, k.PublicKey.AeadID)
 }
 
 func CreatePrivateKey(kemID hpke.KEMID, kdfID hpke.KDFID, aeadID hpke.AEADID) (ObliviousDNSPrivateKey, error) {
@@ -80,22 +84,22 @@ func CreatePrivateKey(kemID hpke.KEMID, kdfID hpke.KDFID, aeadID hpke.AEADID) (O
 	}
 
 	publicKey := ObliviousDNSPublicKey{
-		kemID:          kemID,
-		kdfID:          kdfID,
-		aeadID:         aeadID,
-		publicKeyBytes: suite.KEM.Marshal(pk),
+		KemID:          kemID,
+		KdfID:          kdfID,
+		AeadID:         aeadID,
+		PublicKeyBytes: suite.KEM.Marshal(pk),
 	}
 
 	return ObliviousDNSPrivateKey{publicKey, sk}, nil
 }
 
 func (targetKey ObliviousDNSPublicKey) EncryptQuery(query ObliviousDNSQuery) (ObliviousDNSMessage, error) {
-	suite, err := hpke.AssembleCipherSuite(targetKey.kemID, targetKey.kdfID, targetKey.aeadID)
+	suite, err := hpke.AssembleCipherSuite(targetKey.KemID, targetKey.KdfID, targetKey.AeadID)
 	if err != nil {
 		return ObliviousDNSMessage{}, err
 	}
 
-	pkR, err := suite.KEM.Unmarshal(targetKey.publicKeyBytes)
+	pkR, err := suite.KEM.Unmarshal(targetKey.PublicKeyBytes)
 	if err != nil {
 		return ObliviousDNSMessage{}, err
 	}
@@ -117,24 +121,24 @@ func (targetKey ObliviousDNSPublicKey) EncryptQuery(query ObliviousDNSQuery) (Ob
 }
 
 func (privateKey ObliviousDNSPrivateKey) DecryptQuery(message ObliviousDNSMessage) (*ObliviousDNSQuery, error) {
-	suite, err := hpke.AssembleCipherSuite(privateKey.publicKey.kemID, privateKey.publicKey.kdfID, privateKey.publicKey.aeadID)
+	suite, err := hpke.AssembleCipherSuite(privateKey.PublicKey.KemID, privateKey.PublicKey.KdfID, privateKey.PublicKey.AeadID)
 	if err != nil {
 		return nil, err
 	}
 
-	log.Printf("publicKey = %x\n", privateKey.publicKey.publicKeyBytes)
+	log.Printf("PublicKey = %x\n", privateKey.PublicKey.PublicKeyBytes)
 
 	enc := message.EncryptedMessage[0:32]
 	ct := message.EncryptedMessage[32:]
 	log.Printf("enc = %x\n", enc)
 	log.Printf("ct = %x\n", ct)
 
-	ctxR, err := hpke.SetupBaseR(suite, privateKey.secretKey, enc, []byte("odns-query"))
+	ctxR, err := hpke.SetupBaseR(suite, privateKey.SecretKey, enc, []byte("odns-query"))
 	if err != nil {
 		return nil, err
 	}
 
-	aad := append([]byte{0x01}, privateKey.publicKey.KeyID()...)
+	aad := append([]byte{0x01}, privateKey.PublicKey.KeyID()...)
 	log.Printf("aad = %x\n", aad)
 
 	dnsMessage, err := ctxR.Open(aad, ct)
