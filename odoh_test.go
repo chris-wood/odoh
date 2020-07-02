@@ -101,7 +101,7 @@ func TestQueryEncryption(t *testing.T) {
 		PublicKeyBytes: suite.KEM.Marshal(pkR),
 	}
 
-	privateKey := ObliviousDNSPrivateKey{targetKey, skR}
+	odohKeyPair := ObliviousDNSKeyPair{targetKey, skR}
 	symmetricKey := make([]byte, suite.AEAD.KeySize())
 	rand.Read(symmetricKey)
 
@@ -117,7 +117,7 @@ func TestQueryEncryption(t *testing.T) {
 		t.Fatalf("EncryptQuery failed: %s", err)
 	}
 
-	result, err := privateKey.DecryptQuery(encryptedMessage)
+	result, err := odohKeyPair.DecryptQuery(encryptedMessage)
 	if err != nil {
 		t.Fatalf("DecryptQuery failed: %s", err)
 	}

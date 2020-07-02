@@ -63,24 +63,24 @@ func (k ObliviousDNSPublicKey) CipherSuite() (hpke.CipherSuite, error) {
 	return hpke.AssembleCipherSuite(k.KemID, k.KdfID, k.AeadID)
 }
 
-type ObliviousDNSPrivateKey struct {
+type ObliviousDNSKeyPair struct {
 	PublicKey ObliviousDNSPublicKey
 	SecretKey hpke.KEMPrivateKey
 }
 
-func (k ObliviousDNSPrivateKey) CipherSuite() (hpke.CipherSuite, error) {
+func (k ObliviousDNSKeyPair) CipherSuite() (hpke.CipherSuite, error) {
 	return hpke.AssembleCipherSuite(k.PublicKey.KemID, k.PublicKey.KdfID, k.PublicKey.AeadID)
 }
 
-func CreatePrivateKey(kemID hpke.KEMID, kdfID hpke.KDFID, aeadID hpke.AEADID) (ObliviousDNSPrivateKey, error) {
+func CreateKeyPair(kemID hpke.KEMID, kdfID hpke.KDFID, aeadID hpke.AEADID) (ObliviousDNSKeyPair, error) {
 	suite, err := hpke.AssembleCipherSuite(kemID, kdfID, aeadID)
 	if err != nil {
-		return ObliviousDNSPrivateKey{}, err
+		return ObliviousDNSKeyPair{}, err
 	}
 
 	sk, pk, err := suite.KEM.GenerateKeyPair(rand.Reader)
 	if err != nil {
-		return ObliviousDNSPrivateKey{}, err
+		return ObliviousDNSKeyPair{}, err
 	}
 
 	publicKey := ObliviousDNSPublicKey{
@@ -90,7 +90,7 @@ func CreatePrivateKey(kemID hpke.KEMID, kdfID hpke.KDFID, aeadID hpke.AEADID) (O
 		PublicKeyBytes: suite.KEM.Marshal(pk),
 	}
 
-	return ObliviousDNSPrivateKey{publicKey, sk}, nil
+	return ObliviousDNSKeyPair{publicKey, sk}, nil
 }
 
 func (targetKey ObliviousDNSPublicKey) EncryptQuery(query ObliviousDNSQuery) (ObliviousDNSMessage, error) {
@@ -114,13 +114,13 @@ func (targetKey ObliviousDNSPublicKey) EncryptQuery(query ObliviousDNSQuery) (Ob
 	ct := ctxI.Seal(aad, encodedMessage)
 
 	return ObliviousDNSMessage{
-		MessageType:      0x01,
+		MessageType:      QueryType,
 		KeyID:            targetKey.KeyID(),
 		EncryptedMessage: append(enc, ct...),
 	}, nil
 }
 
-func (privateKey ObliviousDNSPrivateKey) DecryptQuery(message ObliviousDNSMessage) (*ObliviousDNSQuery, error) {
+func (privateKey ObliviousDNSKeyPair) DecryptQuery(message ObliviousDNSMessage) (*ObliviousDNSQuery, error) {
 	suite, err := hpke.AssembleCipherSuite(privateKey.PublicKey.KemID, privateKey.PublicKey.KdfID, privateKey.PublicKey.AeadID)
 	if err != nil {
 		return nil, err
@@ -138,7 +138,7 @@ func (privateKey ObliviousDNSPrivateKey) DecryptQuery(message ObliviousDNSMessag
 		return nil, err
 	}
 
-	aad := append([]byte{0x01}, privateKey.PublicKey.KeyID()...)
+	aad := append([]byte{byte(QueryType)}, privateKey.PublicKey.KeyID()...)
 	log.Printf("aad = %x\n", aad)
 
 	dnsMessage, err := ctxR.Open(aad, ct)
