@@ -26,6 +26,7 @@ import (
 	"bytes"
 	"crypto/rand"
 	"encoding/hex"
+	"fmt"
 	"github.com/cisco/go-hpke"
 	"io"
 	"testing"
@@ -161,6 +162,61 @@ func TestKeyID(t *testing.T) {
 	}
 }
 
+func Test_Sender_ODOHQueryEncryption(t *testing.T) {
+	kemID := hpke.DHKEM_P256 // 0x0010
+	kdfID := hpke.KDF_HKDF_SHA256 // 0x0001
+	aeadID := hpke.AEAD_AESGCM128 // 0x0001
+
+	suite, err := hpke.AssembleCipherSuite(kemID, kdfID, aeadID)
+	if err != nil {
+		t.Fatalf("[%x, %x, %x] Error looking up ciphersuite: %s", kemID, kdfID, aeadID, err)
+	}
+
+	responseKey := make([]byte, suite.AEAD.KeySize())
+	if _, err := io.ReadFull(rand.Reader, responseKey); err != nil {
+		t.Fatalf("Failed generating random key: %s", err)
+	}
+
+	ikm := make([]byte, suite.KEM.PrivateKeySize())
+	rand.Reader.Read(ikm)
+
+	skR, pkR, err := suite.KEM.DeriveKeyPair(ikm)
+	if err != nil {
+		t.Fatalf("[%x, %x, %x] Error generating DH key pair: %s", kemID, kdfID, aeadID, err)
+	}
+
+	targetKey := ObliviousDNSPublicKey{
+		KemID:          kemID,
+		KdfID:          kdfID,
+		AeadID:         aeadID,
+		PublicKeyBytes: suite.KEM.Serialize(pkR),
+	}
+
+	odohKeyPair := ObliviousDNSKeyPair{targetKey, skR}
+	symmetricKey := make([]byte, suite.AEAD.KeySize())
+	rand.Read(symmetricKey)
+
+	dnsMessage := []byte{0x01, 0x02, 0x03}
+
+	message := ObliviousDNSQuery{
+		ResponseKey: symmetricKey,
+		DnsMessage:  dnsMessage,
+	}
+
+	encryptedMessage, err := targetKey.EncryptQuery(message)
+	fmt.Printf("%v\n", encryptedMessage)
+
+	if err != nil {
+		t.Fatalf("Failed to encrypt the message using the public key.")
+	}
+
+	encryptedMessageMarshal := encryptedMessage.Marshal()
+	fmt.Printf("%v\n", encryptedMessageMarshal)
+
+	dnsQuery, err := odohKeyPair.DecryptQuery(encryptedMessage);
+	fmt.Printf("%v\n", dnsQuery)
+}
+
 func TestResponseEncryption(t *testing.T) {
 	kemID := hpke.DHKEM_X25519
 	kdfID := hpke.KDF_HKDF_SHA256
@@ -207,5 +263,58 @@ func TestEncoding(t *testing.T) {
 	emptySlice := make([]byte, 0)
 	if !bytes.Equal([]byte{0x00, 0x00}, encodeLengthPrefixedSlice(emptySlice)) {
 		t.Fatalf("encodeLengthPrefixedSlice for empty slice failed")
+	}
+}
+
+func TestOdohPublicKeyMarshalUnmarshal(t *testing.T) {
+	kemID := hpke.DHKEM_P256 // 0x0010
+	kdfID := hpke.KDF_HKDF_SHA256 // 0x0001
+	aeadID := hpke.AEAD_AESGCM128 // 0x0001
+
+	suite, err := hpke.AssembleCipherSuite(kemID, kdfID, aeadID)
+	if err != nil {
+		t.Fatalf("[%x, %x, %x] Error looking up ciphersuite: %s", kemID, kdfID, aeadID, err)
+	}
+
+	responseKey := make([]byte, suite.AEAD.KeySize())
+	if _, err := io.ReadFull(rand.Reader, responseKey); err != nil {
+		t.Fatalf("Failed generating random key: %s", err)
+	}
+
+	ikm := make([]byte, suite.KEM.PrivateKeySize())
+	rand.Reader.Read(ikm)
+
+	_, pkR, err := suite.KEM.DeriveKeyPair(ikm)
+	if err != nil {
+		t.Fatalf("[%x, %x, %x] Error generating DH key pair: %s", kemID, kdfID, aeadID, err)
+	}
+
+	targetKey := ObliviousDNSPublicKey{
+		KemID:          kemID,
+		KdfID:          kdfID,
+		AeadID:         aeadID,
+		PublicKeyBytes: suite.KEM.Serialize(pkR),
+	}
+
+	serializedPublicKey := targetKey.Marshal()
+
+	fmt.Printf("%v %v\n", len(serializedPublicKey), serializedPublicKey)
+
+	deserializedPublicKey := UnMarshalObliviousDNSPublicKey(serializedPublicKey)
+
+	if !bytes.Equal(deserializedPublicKey.PublicKeyBytes, targetKey.PublicKeyBytes) {
+		t.Fatalf("The deserialized and serialized bytes do not match.")
+	}
+
+	if deserializedPublicKey.KemID != targetKey.KemID {
+		t.Fatalf("The KEM IDs do not match.")
+	}
+
+	if deserializedPublicKey.KdfID != targetKey.KdfID {
+		t.Fatalf("The KDF IDs do not match.")
+	}
+
+	if deserializedPublicKey.AeadID != targetKey.AeadID {
+		t.Fatalf("The AEAD IDs do not match.")
 	}
 }
