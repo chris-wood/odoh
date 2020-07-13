@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-func Test_encodeLengthPrefixedSlice(t *testing.T) {
+func TestEncodeLengthPrefixedSlice(t *testing.T) {
 	test_array := []byte{0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08}
 	result := encodeLengthPrefixedSlice(test_array);
 	expectation := []byte{0x00, 0x09, 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08}
@@ -15,7 +15,7 @@ func Test_encodeLengthPrefixedSlice(t *testing.T) {
 	}
 }
 
-func Test_decodeLengthPrefixedSlice(t *testing.T) {
+func TestDecodeLengthPrefixedSlice(t *testing.T) {
 	test_array := []byte{0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08}
 	result := encodeLengthPrefixedSlice(test_array);
 	decoded_result, length, err := decodeLengthPrefixedSlice(result);

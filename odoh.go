@@ -26,7 +26,7 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/binary"
-	"github.com/bifurcation/hpke"
+	"github.com/cisco/go-hpke"
 	"log"
 )
 
@@ -78,7 +78,9 @@ func CreateKeyPair(kemID hpke.KEMID, kdfID hpke.KDFID, aeadID hpke.AEADID) (Obli
 		return ObliviousDNSKeyPair{}, err
 	}
 
-	sk, pk, err := suite.KEM.GenerateKeyPair(rand.Reader)
+	ikm := make([]byte, suite.KEM.PrivateKeySize())
+	rand.Reader.Read(ikm)
+	sk, pk, err := suite.KEM.DeriveKeyPair(ikm)
 	if err != nil {
 		return ObliviousDNSKeyPair{}, err
 	}
@@ -87,7 +89,7 @@ func CreateKeyPair(kemID hpke.KEMID, kdfID hpke.KDFID, aeadID hpke.AEADID) (Obli
 		KemID:          kemID,
 		KdfID:          kdfID,
 		AeadID:         aeadID,
-		PublicKeyBytes: suite.KEM.Marshal(pk),
+		PublicKeyBytes: suite.KEM.Serialize(pk),
 	}
 
 	return ObliviousDNSKeyPair{publicKey, sk}, nil
@@ -99,7 +101,7 @@ func (targetKey ObliviousDNSPublicKey) EncryptQuery(query ObliviousDNSQuery) (Ob
 		return ObliviousDNSMessage{}, err
 	}
 
-	pkR, err := suite.KEM.Unmarshal(targetKey.PublicKeyBytes)
+	pkR, err := suite.KEM.Deserialize(targetKey.PublicKeyBytes)
 	if err != nil {
 		return ObliviousDNSMessage{}, err
 	}
