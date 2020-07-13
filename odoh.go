@@ -220,7 +220,6 @@ func (privateKey ObliviousDNSKeyPair) DecryptQuery(message ObliviousDNSMessage) 
 	}
 
 	aad := append([]byte{byte(QueryType)}, privateKey.PublicKey.KeyID()...)
-	log.Printf("Reached here : ")
 	log.Printf("aad = %x\n", aad)
 
 	dnsMessage, err := ctxR.Open(aad, ct)
