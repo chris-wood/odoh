@@ -26,7 +26,7 @@ import (
 	"bytes"
 	"crypto/rand"
 	"encoding/hex"
-	"github.com/bifurcation/hpke"
+	"github.com/cisco/go-hpke"
 	"io"
 	"testing"
 )
@@ -89,7 +89,9 @@ func TestQueryEncryption(t *testing.T) {
 		t.Fatalf("[%x, %x, %x] Error looking up ciphersuite: %s", kemID, kdfID, aeadID, err)
 	}
 
-	skR, pkR, err := suite.KEM.GenerateKeyPair(rand.Reader)
+	ikm := make([]byte, suite.KEM.PrivateKeySize())
+	rand.Reader.Read(ikm)
+	skR, pkR, err := suite.KEM.DeriveKeyPair(ikm)
 	if err != nil {
 		t.Fatalf("[%x, %x, %x] Error generating DH key pair: %s", kemID, kdfID, aeadID, err)
 	}
@@ -98,7 +100,7 @@ func TestQueryEncryption(t *testing.T) {
 		KemID:          kemID,
 		KdfID:          kdfID,
 		AeadID:         aeadID,
-		PublicKeyBytes: suite.KEM.Marshal(pkR),
+		PublicKeyBytes: suite.KEM.Serialize(pkR),
 	}
 
 	odohKeyPair := ObliviousDNSKeyPair{targetKey, skR}

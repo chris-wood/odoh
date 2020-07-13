@@ -27,7 +27,7 @@ import (
 	"crypto/cipher"
 	"encoding/binary"
 	"fmt"
-	"github.com/bifurcation/hpke"
+	"github.com/cisco/go-hpke"
 	"log"
 )
 
