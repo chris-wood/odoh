@@ -2,6 +2,8 @@ package odoh
 
 import (
 	"bytes"
+	"encoding/hex"
+	"fmt"
 	"testing"
 )
 

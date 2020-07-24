@@ -318,3 +318,30 @@ func TestOdohPublicKeyMarshalUnmarshal(t *testing.T) {
 		t.Fatalf("The AEAD IDs do not match.")
 	}
 }
+
+func TestFixedOdohKeyPairCreation(t *testing.T) {
+	const (
+		kemID  = hpke.DHKEM_X25519
+		kdfID  = hpke.KDF_HKDF_SHA256
+		aeadID = hpke.AEAD_AESGCM128
+	)
+	// Fixed 16 byte seed
+	seedHex := "f7c664a7959b2aa02ffa7abb0d2022ab"
+	seed, err := hex.DecodeString(seedHex)
+	if err != nil {
+		fmt.Printf("Unable to decode seed to bytes")
+	}
+	keyPair, err := DeriveFixedKeyPairFromSeed(kemID, kdfID, aeadID, seed)
+	if err != nil {
+		fmt.Printf("Unable to derive a ObliviousDNSKeyPair")
+	}
+	for i := 0; i < 10; i++ {
+		keyPairDerived, err := DeriveFixedKeyPairFromSeed(kemID, kdfID, aeadID, seed)
+		if err != nil {
+			t.Fatalf("Unable to derive a ObliviousDNSKeyPair")
+		}
+		if !bytes.Equal(keyPairDerived.PublicKey.Marshal(), keyPair.PublicKey.Marshal()) {
+			t.Fatalf("Public Key Derived does not match")
+		}
+	}
+}
