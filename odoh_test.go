@@ -163,7 +163,7 @@ func TestKeyID(t *testing.T) {
 }
 
 func Test_Sender_ODOHQueryEncryption(t *testing.T) {
-	kemID := hpke.DHKEM_P256 // 0x0010
+	kemID := hpke.DHKEM_P256      // 0x0010
 	kdfID := hpke.KDF_HKDF_SHA256 // 0x0001
 	aeadID := hpke.AEAD_AESGCM128 // 0x0001
 
@@ -213,7 +213,7 @@ func Test_Sender_ODOHQueryEncryption(t *testing.T) {
 	encryptedMessageMarshal := encryptedMessage.Marshal()
 	fmt.Printf("%v\n", encryptedMessageMarshal)
 
-	dnsQuery, err := odohKeyPair.DecryptQuery(encryptedMessage);
+	dnsQuery, err := odohKeyPair.DecryptQuery(encryptedMessage)
 	fmt.Printf("%v\n", dnsQuery)
 }
 
@@ -267,7 +267,7 @@ func TestEncoding(t *testing.T) {
 }
 
 func TestOdohPublicKeyMarshalUnmarshal(t *testing.T) {
-	kemID := hpke.DHKEM_P256 // 0x0010
+	kemID := hpke.DHKEM_P256      // 0x0010
 	kdfID := hpke.KDF_HKDF_SHA256 // 0x0001
 	aeadID := hpke.AEAD_AESGCM128 // 0x0001
 
