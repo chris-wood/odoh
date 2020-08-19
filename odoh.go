@@ -26,7 +26,6 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/binary"
-	"fmt"
 	"github.com/cisco/go-hpke"
 	"log"
 )
@@ -204,15 +203,8 @@ func (targetKey ObliviousDNSPublicKey) EncryptQuery(query ObliviousDNSQuery) (Ob
 	}
 
 	encodedMessage := query.Marshal()
-	fmt.Printf("enc : [%v] %x\n", len(enc), enc)
-	fmt.Printf("Encoded Message : [%v] %x\n", len(encodedMessage), encodedMessage)
 	aad := append([]byte{0x01}, targetKey.KeyID()...)
-	fmt.Printf("AAD : [%v] %x\n", len(aad), aad)
 	ct := ctxI.Seal(aad, encodedMessage)
-	fmt.Printf("CT: [%v] %x\n", len(ct), ct)
-
-	encct := append(enc, ct...)
-	fmt.Printf("[enc+ct] [%v] %x\n", len(encct), encct)
 
 	return ObliviousDNSMessage{
 		MessageType:      QueryType,
