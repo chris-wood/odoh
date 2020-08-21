@@ -345,3 +345,39 @@ func TestFixedOdohKeyPairCreation(t *testing.T) {
 		}
 	}
 }
+
+func TestSealQueryAndOpenAnswer(t *testing.T) {
+	kemID := hpke.DHKEM_X25519
+	kdfID := hpke.KDF_HKDF_SHA256
+	aeadID := hpke.AEAD_AESGCM128
+	suite, err := hpke.AssembleCipherSuite(kemID, kdfID, aeadID)
+
+	kp, err := CreateKeyPair(kemID, kdfID, aeadID)
+	if err != nil {
+		t.Fatalf("Unable to create a Key Pair")
+	}
+
+	responseKey := make([]byte, 16)
+	dnsQueryData := make([]byte, 40)
+	_, err = rand.Read(responseKey)
+	_, err = rand.Read(dnsQueryData)
+
+	encryptedData, err := SealQuery(dnsQueryData, responseKey, kp.PublicKey)
+
+	mockAnswerData := make([]byte, 100)
+	_, err = rand.Read(mockAnswerData)
+
+	receivedEncryptedQuery, err := UnmarshalDNSMessage(encryptedData)
+
+	queryRequested, err := kp.DecryptQuery(*receivedEncryptedQuery)
+	responseKeyId := []byte{0x00, 0x00}
+	aad := append([]byte{byte(ResponseType)}, responseKeyId...) // message_type = 0x02, with an empty keyID
+	encryptedAnswer, err := queryRequested.EncryptResponse(suite, aad, mockAnswerData)
+	encryptedResponseMessage := CreateObliviousDNSMessage(ResponseType, []byte{}, encryptedAnswer)
+
+	response, err := OpenAnswer(encryptedResponseMessage, responseKey, suite)
+
+	if !bytes.Equal(response, mockAnswerData) {
+		t.Fatalf("Decryption of the result doesnot match encrypted value")
+	}
+}

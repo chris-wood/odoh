@@ -26,6 +26,7 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/binary"
+	"errors"
 	"github.com/cisco/go-hpke"
 	"log"
 )
@@ -231,12 +232,8 @@ func (privateKey ObliviousDNSKeyPair) DecryptQuery(message ObliviousDNSMessage) 
 		return nil, err
 	}
 
-	log.Printf("PublicKey = %x\n", privateKey.PublicKey.PublicKeyBytes)
-
 	enc := message.EncryptedMessage[0:32]
 	ct := message.EncryptedMessage[32:]
-	log.Printf("enc = %x\n", enc)
-	log.Printf("ct = %x\n", ct)
 
 	ctxR, err := hpke.SetupBaseR(suite, privateKey.SecretKey, enc, []byte("odns-query"))
 	if err != nil {
@@ -245,7 +242,6 @@ func (privateKey ObliviousDNSKeyPair) DecryptQuery(message ObliviousDNSMessage) 
 	}
 
 	aad := append([]byte{byte(QueryType)}, privateKey.PublicKey.KeyID()...)
-	log.Printf("aad = %x\n", aad)
 
 	dnsMessage, err := ctxR.Open(aad, ct)
 	if err != nil {
@@ -253,4 +249,37 @@ func (privateKey ObliviousDNSKeyPair) DecryptQuery(message ObliviousDNSMessage) 
 	}
 
 	return UnmarshalQueryBody(dnsMessage)
+}
+
+func SealQuery(dnsQuery []byte, key []byte, publicKey ObliviousDNSPublicKey) (res []byte, err error) {
+	odohQuery := ObliviousDNSQuery{
+		ResponseKey: key,
+		DnsMessage:  dnsQuery,
+	}
+
+	odnsMessage, err := publicKey.EncryptQuery(odohQuery)
+	if err != nil {
+		log.Fatalf("Unable to Encrypt oDoH Question with provided Public Key of Resolver")
+		return nil, err
+	}
+
+	return odnsMessage.Marshal(), nil
+}
+
+func OpenAnswer(message *ObliviousDNSMessage, key []byte, suite hpke.CipherSuite) ([]byte, error) {
+	odohResponse := ObliviousDNSResponse{ResponseKey: key}
+	responseMessageType := message.MessageType
+	if responseMessageType != ResponseType {
+		return nil, errors.New("answer is not a valid response type")
+	}
+	encryptedResponse := message.EncryptedMessage
+
+	responseKeyId := []byte{0x00, 0x00}
+	aad := append([]byte{0x02}, responseKeyId...) // message_type = 0x02, with an empty keyID
+
+	decryptedResponse, err := odohResponse.DecryptResponse(suite, aad, encryptedResponse)
+	if err != nil {
+		return nil, errors.New("unable to decrypt the obtained response using the symmetric key sent")
+	}
+	return decryptedResponse, nil
 }
