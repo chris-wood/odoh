@@ -26,6 +26,7 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/binary"
+	"errors"
 	"github.com/cisco/go-hpke"
 	"log"
 )
@@ -231,12 +232,8 @@ func (privateKey ObliviousDNSKeyPair) DecryptQuery(message ObliviousDNSMessage) 
 		return nil, err
 	}
 
-	log.Printf("PublicKey = %x\n", privateKey.PublicKey.PublicKeyBytes)
-
 	enc := message.EncryptedMessage[0:32]
 	ct := message.EncryptedMessage[32:]
-	log.Printf("enc = %x\n", enc)
-	log.Printf("ct = %x\n", ct)
 
 	ctxR, err := hpke.SetupBaseR(suite, privateKey.SecretKey, enc, []byte("odns-query"))
 	if err != nil {
@@ -245,7 +242,6 @@ func (privateKey ObliviousDNSKeyPair) DecryptQuery(message ObliviousDNSMessage) 
 	}
 
 	aad := append([]byte{byte(QueryType)}, privateKey.PublicKey.KeyID()...)
-	log.Printf("aad = %x\n", aad)
 
 	dnsMessage, err := ctxR.Open(aad, ct)
 	if err != nil {
@@ -253,4 +249,81 @@ func (privateKey ObliviousDNSKeyPair) DecryptQuery(message ObliviousDNSMessage) 
 	}
 
 	return UnmarshalQueryBody(dnsMessage)
+}
+
+type QueryContext struct {
+	key       []byte
+	publicKey ObliviousDNSPublicKey
+}
+
+func lookupAeadKeySizeByAeadID(id hpke.AEADID) int {
+	switch id {
+	case hpke.AEAD_AESGCM128:
+		return 16
+	case hpke.AEAD_AESGCM256:
+		return 32
+	case hpke.AEAD_CHACHA20POLY1305:
+		return 32
+	default:
+		return 0
+	}
+}
+
+func createQueryContext(publicKey ObliviousDNSPublicKey) QueryContext {
+	keySize := lookupAeadKeySizeByAeadID(publicKey.AeadID)
+	if keySize == 0 {
+		return QueryContext{
+			key:       nil,
+			publicKey: publicKey,
+		}
+	}
+	responseKey := make([]byte, keySize)
+	_, err := rand.Read(responseKey)
+	if err != nil {
+		return QueryContext{
+			key:       nil,
+			publicKey: publicKey,
+		}
+	}
+	return QueryContext{
+		key:       responseKey,
+		publicKey: publicKey,
+	}
+}
+
+func SealQuery(dnsQuery []byte, publicKey ObliviousDNSPublicKey) ([]byte, QueryContext, error) {
+	queryContext := createQueryContext(publicKey)
+	odohQuery := ObliviousDNSQuery{
+		ResponseKey: queryContext.key,
+		DnsMessage:  dnsQuery,
+	}
+
+	odnsMessage, err := queryContext.publicKey.EncryptQuery(odohQuery)
+	if err != nil {
+		log.Fatalf("Unable to Encrypt oDoH Question with provided Public Key of Resolver")
+		return nil, queryContext, err
+	}
+
+	return odnsMessage.Marshal(), queryContext, nil
+}
+
+func (c QueryContext) OpenAnswer(encryptedDnsAnswer []byte) ([]byte, error) {
+	message := CreateObliviousDNSMessage(ResponseType, []byte{}, encryptedDnsAnswer)
+	odohResponse := ObliviousDNSResponse{ResponseKey: c.key}
+	responseMessageType := message.MessageType
+	if responseMessageType != ResponseType {
+		return nil, errors.New("answer is not a valid response type")
+	}
+	encryptedResponse := message.EncryptedMessage
+
+	responseKeyId := []byte{0x00, 0x00}
+	aad := append([]byte{0x02}, responseKeyId...) // message_type = 0x02, with an empty keyID
+
+	suite, err := hpke.AssembleCipherSuite(c.publicKey.KemID, c.publicKey.KdfID, c.publicKey.AeadID)
+
+	decryptedResponse, err := odohResponse.DecryptResponse(suite, aad, encryptedResponse)
+	if err != nil {
+		return nil, errors.New("unable to decrypt the obtained response using the symmetric key sent")
+	}
+	return decryptedResponse, nil
 }
