@@ -254,39 +254,57 @@ func (privateKey ObliviousDNSKeyPair) DecryptQuery(message ObliviousDNSMessage) 
 type QueryContext struct {
 	key       []byte
 	publicKey ObliviousDNSPublicKey
-	suite     hpke.CipherSuite
 }
 
-func CreateQueryContext(suite hpke.CipherSuite, publicKey ObliviousDNSPublicKey) QueryContext {
-	responseKey := make([]byte, suite.AEAD.KeySize())
+func lookupAeadKeySizeByAeadID(id hpke.AEADID) int {
+	switch id {
+	case hpke.AEAD_AESGCM128:
+		return 16
+	case hpke.AEAD_AESGCM256:
+		return 32
+	case hpke.AEAD_CHACHA20POLY1305:
+		return 32
+	default:
+		return 0
+	}
+}
+
+func createQueryContext(publicKey ObliviousDNSPublicKey) QueryContext {
+	keySize := lookupAeadKeySizeByAeadID(publicKey.AeadID)
+	if keySize == 0 {
+		return QueryContext{
+			key:       nil,
+			publicKey: publicKey,
+		}
+	}
+	responseKey := make([]byte, keySize)
 	_, err := rand.Read(responseKey)
 	if err != nil {
 		return QueryContext{
 			key:       nil,
 			publicKey: publicKey,
-			suite:     suite,
 		}
 	}
 	return QueryContext{
 		key:       responseKey,
 		publicKey: publicKey,
-		suite:     suite,
 	}
 }
 
-func (c QueryContext) SealQuery(dnsQuery []byte) ([]byte, error) {
+func SealQuery(dnsQuery []byte, publicKey ObliviousDNSPublicKey) ([]byte, QueryContext, error) {
+	queryContext := createQueryContext(publicKey)
 	odohQuery := ObliviousDNSQuery{
-		ResponseKey: c.key,
+		ResponseKey: queryContext.key,
 		DnsMessage:  dnsQuery,
 	}
 
-	odnsMessage, err := c.publicKey.EncryptQuery(odohQuery)
+	odnsMessage, err := queryContext.publicKey.EncryptQuery(odohQuery)
 	if err != nil {
 		log.Fatalf("Unable to Encrypt oDoH Question with provided Public Key of Resolver")
-		return nil, err
+		return nil, queryContext, err
 	}
 
-	return odnsMessage.Marshal(), nil
+	return odnsMessage.Marshal(), queryContext, nil
 }
 
 func (c QueryContext) OpenAnswer(encryptedDnsAnswer []byte) ([]byte, error) {
@@ -301,7 +319,9 @@ func (c QueryContext) OpenAnswer(encryptedDnsAnswer []byte) ([]byte, error) {
 	responseKeyId := []byte{0x00, 0x00}
 	aad := append([]byte{0x02}, responseKeyId...) // message_type = 0x02, with an empty keyID
 
-	decryptedResponse, err := odohResponse.DecryptResponse(c.suite, aad, encryptedResponse)
+	suite, err := hpke.AssembleCipherSuite(c.publicKey.KemID, c.publicKey.KdfID, c.publicKey.AeadID)
+
+	decryptedResponse, err := odohResponse.DecryptResponse(suite, aad, encryptedResponse)
 	if err != nil {
 		return nil, errors.New("unable to decrypt the obtained response using the symmetric key sent")
 	}

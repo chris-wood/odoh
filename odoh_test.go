@@ -360,9 +360,7 @@ func TestSealQueryAndOpenAnswer(t *testing.T) {
 	dnsQueryData := make([]byte, 40)
 	_, err = rand.Read(dnsQueryData)
 
-	queryContext := CreateQueryContext(suite, kp.PublicKey)
-
-	encryptedData, err := queryContext.SealQuery(dnsQueryData)
+	encryptedData, queryContext, err := SealQuery(dnsQueryData, kp.PublicKey)
 
 	mockAnswerData := make([]byte, 100)
 	_, err = rand.Read(mockAnswerData)
