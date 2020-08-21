@@ -357,12 +357,12 @@ func TestSealQueryAndOpenAnswer(t *testing.T) {
 		t.Fatalf("Unable to create a Key Pair")
 	}
 
-	responseKey := make([]byte, 16)
 	dnsQueryData := make([]byte, 40)
-	_, err = rand.Read(responseKey)
 	_, err = rand.Read(dnsQueryData)
 
-	encryptedData, err := SealQuery(dnsQueryData, responseKey, kp.PublicKey)
+	queryContext := CreateQueryContext(suite, kp.PublicKey)
+
+	encryptedData, err := queryContext.SealQuery(dnsQueryData)
 
 	mockAnswerData := make([]byte, 100)
 	_, err = rand.Read(mockAnswerData)
@@ -373,9 +373,8 @@ func TestSealQueryAndOpenAnswer(t *testing.T) {
 	responseKeyId := []byte{0x00, 0x00}
 	aad := append([]byte{byte(ResponseType)}, responseKeyId...) // message_type = 0x02, with an empty keyID
 	encryptedAnswer, err := queryRequested.EncryptResponse(suite, aad, mockAnswerData)
-	encryptedResponseMessage := CreateObliviousDNSMessage(ResponseType, []byte{}, encryptedAnswer)
 
-	response, err := OpenAnswer(encryptedResponseMessage, responseKey, suite)
+	response, err := queryContext.OpenAnswer(encryptedAnswer)
 
 	if !bytes.Equal(response, mockAnswerData) {
 		t.Fatalf("Decryption of the result doesnot match encrypted value")
