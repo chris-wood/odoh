@@ -51,9 +51,7 @@ func (k ObliviousDNSPublicKey) KeyID() []byte {
 	h.Write(message)
 	keyIdHash := h.Sum(nil)
 
-	result := make([]byte, 2)
-	binary.BigEndian.PutUint16(result, uint16(len(keyIdHash)))
-	return append(result, keyIdHash...)
+	return keyIdHash
 }
 
 func (k ObliviousDNSPublicKey) Marshal() []byte {

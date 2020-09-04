@@ -134,7 +134,7 @@ func TestQueryEncryption(t *testing.T) {
 }
 
 func TestKeyID(t *testing.T) {
-	expectedKeyId := "002050106dbb316e7bf98bc862fd71e131d28cd871a11af84b19f323e465f32f1006"
+	expectedKeyId := "50106dbb316e7bf98bc862fd71e131d28cd871a11af84b19f323e465f32f1006"
 	expectedKeyIdBytes, err := hex.DecodeString(expectedKeyId)
 	if err != nil {
 		t.Fatal("Failed to decode AAD")
