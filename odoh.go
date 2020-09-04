@@ -232,8 +232,9 @@ func (privateKey ObliviousDNSKeyPair) DecryptQuery(message ObliviousDNSMessage) 
 		return nil, err
 	}
 
-	enc := message.EncryptedMessage[0:32]
-	ct := message.EncryptedMessage[32:]
+	keySize := suite.KEM.PublicKeySize()
+	enc := message.EncryptedMessage[0:keySize]
+	ct := message.EncryptedMessage[keySize:]
 
 	ctxR, err := hpke.SetupBaseR(suite, privateKey.SecretKey, enc, []byte("odns-query"))
 	if err != nil {

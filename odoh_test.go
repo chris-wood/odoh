@@ -214,7 +214,13 @@ func Test_Sender_ODOHQueryEncryption(t *testing.T) {
 	fmt.Printf("%v\n", encryptedMessageMarshal)
 
 	dnsQuery, err := odohKeyPair.DecryptQuery(encryptedMessage)
-	fmt.Printf("%v\n", dnsQuery)
+	if err != nil {
+		t.Fatalf("Failed to decrypt message with error: %s", err)
+	}
+
+	if !bytes.Equal(dnsQuery.DnsMessage, dnsMessage) {
+		t.Fatalf("Incorrect dnsMessage returned")
+	}
 }
 
 func TestResponseEncryption(t *testing.T) {
