@@ -51,9 +51,7 @@ func (k ObliviousDNSPublicKey) KeyID() []byte {
 	h.Write(message)
 	keyIdHash := h.Sum(nil)
 
-	result := make([]byte, 2)
-	binary.BigEndian.PutUint16(result, uint16(len(keyIdHash)))
-	return append(result, keyIdHash...)
+	return keyIdHash
 }
 
 func (k ObliviousDNSPublicKey) Marshal() []byte {
@@ -232,8 +230,9 @@ func (privateKey ObliviousDNSKeyPair) DecryptQuery(message ObliviousDNSMessage) 
 		return nil, err
 	}
 
-	enc := message.EncryptedMessage[0:32]
-	ct := message.EncryptedMessage[32:]
+	keySize := suite.KEM.PublicKeySize()
+	enc := message.EncryptedMessage[0:keySize]
+	ct := message.EncryptedMessage[keySize:]
 
 	ctxR, err := hpke.SetupBaseR(suite, privateKey.SecretKey, enc, []byte("odns-query"))
 	if err != nil {
