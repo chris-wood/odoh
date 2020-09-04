@@ -204,14 +204,9 @@ func Test_Sender_ODOHQueryEncryption(t *testing.T) {
 	}
 
 	encryptedMessage, err := targetKey.EncryptQuery(message)
-	fmt.Printf("%v\n", encryptedMessage)
-
 	if err != nil {
 		t.Fatalf("Failed to encrypt the message using the public key.")
 	}
-
-	encryptedMessageMarshal := encryptedMessage.Marshal()
-	fmt.Printf("%v\n", encryptedMessageMarshal)
 
 	dnsQuery, err := odohKeyPair.DecryptQuery(encryptedMessage)
 	if err != nil {
@@ -303,9 +298,6 @@ func TestOdohPublicKeyMarshalUnmarshal(t *testing.T) {
 	}
 
 	serializedPublicKey := targetKey.Marshal()
-
-	fmt.Printf("%v %v\n", len(serializedPublicKey), serializedPublicKey)
-
 	deserializedPublicKey := UnMarshalObliviousDNSPublicKey(serializedPublicKey)
 
 	if !bytes.Equal(deserializedPublicKey.PublicKeyBytes, targetKey.PublicKeyBytes) {
