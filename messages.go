@@ -25,7 +25,6 @@ package odoh
 import (
 	"crypto/aes"
 	"crypto/cipher"
-	"encoding/binary"
 	"fmt"
 	"github.com/cisco/go-hpke"
 )
@@ -37,34 +36,46 @@ const (
 	ResponseType ObliviousMessageType = 0x02
 )
 
+const ResponseSeedLength uint16 = 32
+
 type ObliviousDNSQuery struct {
-	ResponseKey []byte
-	DnsMessage  []byte
+	DnsMessage   []byte
+	ResponseSeed [ResponseSeedLength]byte
+	Padding      []byte
 }
 
 func (m ObliviousDNSQuery) Marshal() []byte {
-	result := encodeLengthPrefixedSlice(m.ResponseKey)
-	result = append(result, encodeLengthPrefixedSlice(m.DnsMessage)...)
+	result := encodeLengthPrefixedSlice(m.DnsMessage)
+	result = append(result, m.ResponseSeed[:]...)
+	result = append(result, encodeLengthPrefixedSlice(m.Padding)...)
 	return result
 }
 
 func UnmarshalQueryBody(data []byte) (*ObliviousDNSQuery, error) {
-	keyLength := binary.BigEndian.Uint16(data)
-	if int(2+keyLength) > len(data) {
-		return nil, fmt.Errorf("Invalid key length")
-	}
-	key := data[2 : 2+keyLength]
-
-	messageLength := binary.BigEndian.Uint16(data[2+keyLength:])
-	if int(2+keyLength+2+messageLength) > len(data) {
-		return nil, fmt.Errorf("Invalid DNS message length")
+	if len(data) < 1 {
+		return nil, fmt.Errorf("Invalid data length: %d", len(data))
 	}
 
-	message := data[2+keyLength+2 : 2+keyLength+2+messageLength]
+	message, offset, err := decodeLengthPrefixedSlice(data)
+	if err != nil {
+		return nil, err
+	}
+	
+	if offset + int(ResponseSeedLength) > len(data) {
+		return nil, fmt.Errorf("Invalid response seed length")
+	}
+	var seed [ResponseSeedLength]byte
+	copy(seed[:], data[offset : offset + int(ResponseSeedLength)])
+
+	padding, offset, err := decodeLengthPrefixedSlice(data[offset + int(ResponseSeedLength):])
+	if err != nil {
+		return nil, err
+	}
 
 	return &ObliviousDNSQuery{
-		ResponseKey: key,
-		DnsMessage:  message,
+		DnsMessage:   message,
+		ResponseSeed: seed,
+		Padding: padding,
 	}, nil
 }
 
@@ -74,7 +85,7 @@ func (m ObliviousDNSQuery) Message() []byte {
 
 func (m ObliviousDNSQuery) EncryptResponse(suite hpke.CipherSuite, aad, response []byte) ([]byte, error) {
 	// TODO(caw): we need to support other ciphersuites, so dispatch on `suite`
-	block, err := aes.NewCipher(m.ResponseKey)
+	block, err := aes.NewCipher(m.ResponseSeed[:])
 	if err != nil {
 		return nil, err
 	}

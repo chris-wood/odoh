@@ -251,8 +251,8 @@ func (privateKey ObliviousDNSKeyPair) DecryptQuery(message ObliviousDNSMessage) 
 }
 
 type QueryContext struct {
-	key       []byte
-	publicKey ObliviousDNSPublicKey
+	responseSeed [ResponseSeedLength]byte
+	publicKey    ObliviousDNSPublicKey
 }
 
 func lookupAeadKeySizeByAeadID(id hpke.AEADID) int {
@@ -269,32 +269,23 @@ func lookupAeadKeySizeByAeadID(id hpke.AEADID) int {
 }
 
 func createQueryContext(publicKey ObliviousDNSPublicKey) QueryContext {
-	keySize := lookupAeadKeySizeByAeadID(publicKey.AeadID)
-	if keySize == 0 {
-		return QueryContext{
-			key:       nil,
-			publicKey: publicKey,
-		}
-	}
-	responseKey := make([]byte, keySize)
-	_, err := rand.Read(responseKey)
+	var responseSeed [ResponseSeedLength]byte
+	_, err := rand.Read(responseSeed[:])
 	if err != nil {
-		return QueryContext{
-			key:       nil,
-			publicKey: publicKey,
-		}
+		return QueryContext{}
 	}
 	return QueryContext{
-		key:       responseKey,
-		publicKey: publicKey,
+		responseSeed: responseSeed,
+		publicKey:    publicKey,
 	}
 }
 
 func SealQuery(dnsQuery []byte, publicKey ObliviousDNSPublicKey) ([]byte, QueryContext, error) {
 	queryContext := createQueryContext(publicKey)
 	odohQuery := ObliviousDNSQuery{
-		ResponseKey: queryContext.key,
-		DnsMessage:  dnsQuery,
+		DnsMessage:   dnsQuery,
+		ResponseSeed: queryContext.responseSeed,
+		Padding:      []byte{},
 	}
 
 	odnsMessage, err := queryContext.publicKey.EncryptQuery(odohQuery)
@@ -308,7 +299,7 @@ func SealQuery(dnsQuery []byte, publicKey ObliviousDNSPublicKey) ([]byte, QueryC
 
 func (c QueryContext) OpenAnswer(encryptedDnsAnswer []byte) ([]byte, error) {
 	message := CreateObliviousDNSMessage(ResponseType, []byte{}, encryptedDnsAnswer)
-	odohResponse := ObliviousDNSResponse{ResponseKey: c.key}
+	odohResponse := ObliviousDNSResponse{ResponseKey: c.responseSeed[:]}
 	responseMessageType := message.MessageType
 	if responseMessageType != ResponseType {
 		return nil, errors.New("answer is not a valid response type")

@@ -33,12 +33,17 @@ import (
 )
 
 func TestQueryBodyMarshal(t *testing.T) {
-	key := []byte{0x00, 0x01, 0x02, 0x04}
 	message := []byte{0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F}
+	seed := [32]byte{0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
+		0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
+		0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
+		0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
+	}
 
 	queryBody := ObliviousDNSQuery{
-		ResponseKey: key,
-		DnsMessage:  message,
+		DnsMessage:   message,
+		ResponseSeed: seed,
+		Padding:      nil,
 	}
 
 	encoded := queryBody.Marshal()
@@ -46,11 +51,11 @@ func TestQueryBodyMarshal(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Encode/decode failed")
 	}
-	if !bytes.Equal(decoded.ResponseKey, key) {
+	if decoded.ResponseSeed != seed {
 		t.Fatalf("Key mismatch")
 	}
 	if !bytes.Equal(decoded.DnsMessage, message) {
-		t.Fatalf("Key mismatch")
+		t.Fatalf("Message mismatch")
 	}
 }
 
@@ -105,14 +110,15 @@ func TestQueryEncryption(t *testing.T) {
 	}
 
 	odohKeyPair := ObliviousDNSKeyPair{targetKey, skR}
-	symmetricKey := make([]byte, suite.AEAD.KeySize())
-	rand.Read(symmetricKey)
+	var responseSeed [ResponseSeedLength]byte
+	rand.Read(responseSeed[:])
 
 	dnsMessage := []byte{0x01, 0x02}
 
 	message := ObliviousDNSQuery{
-		ResponseKey: symmetricKey,
 		DnsMessage:  dnsMessage,
+		ResponseSeed: responseSeed,
+		Padding: nil,
 	}
 
 	encryptedMessage, err := targetKey.EncryptQuery(message)
@@ -125,7 +131,7 @@ func TestQueryEncryption(t *testing.T) {
 		t.Fatalf("DecryptQuery failed: %s", err)
 	}
 
-	if !bytes.Equal(result.ResponseKey, symmetricKey) {
+	if result.ResponseSeed != responseSeed {
 		t.Fatalf("Incorrect key returned")
 	}
 	if !bytes.Equal(result.DnsMessage, dnsMessage) {
@@ -193,14 +199,15 @@ func Test_Sender_ODOHQueryEncryption(t *testing.T) {
 	}
 
 	odohKeyPair := ObliviousDNSKeyPair{targetKey, skR}
-	symmetricKey := make([]byte, suite.AEAD.KeySize())
-	rand.Read(symmetricKey)
+	var responseSeed [ResponseSeedLength]byte
+	rand.Read(responseSeed[:])
 
 	dnsMessage := []byte{0x01, 0x02, 0x03}
 
 	message := ObliviousDNSQuery{
-		ResponseKey: symmetricKey,
 		DnsMessage:  dnsMessage,
+		ResponseSeed: responseSeed,
+		Padding: nil,
 	}
 
 	encryptedMessage, err := targetKey.EncryptQuery(message)
@@ -228,17 +235,18 @@ func TestResponseEncryption(t *testing.T) {
 		t.Fatalf("[%x, %x, %x] Error looking up ciphersuite: %s", kemID, kdfID, aeadID, err)
 	}
 
-	responseKey := make([]byte, suite.AEAD.KeySize())
-	if _, err := io.ReadFull(rand.Reader, responseKey); err != nil {
-		t.Fatalf("Failed generating random key: %s", err)
+	var responseSeed [ResponseSeedLength]byte
+	if _, err := io.ReadFull(rand.Reader, responseSeed[:]); err != nil {
+		t.Fatalf("Failed generating random seed: %s", err)
 	}
 
 	aad := []byte("ODOH")
 	responseData := []byte("fake response")
 
 	query := ObliviousDNSQuery{
-		ResponseKey: responseKey,
 		DnsMessage:  nil,
+		ResponseSeed: responseSeed,
+		Padding: nil,
 	}
 
 	encryptedResponse, err := query.EncryptResponse(suite, aad, responseData)
@@ -247,7 +255,7 @@ func TestResponseEncryption(t *testing.T) {
 	}
 
 	response := ObliviousDNSResponse{
-		ResponseKey: responseKey,
+		ResponseKey: responseSeed[:],
 	}
 
 	decryptedResponse, err := response.DecryptResponse(suite, aad, encryptedResponse)
