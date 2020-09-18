@@ -154,6 +154,13 @@ func UnmarshalDNSResponse(data []byte) (*ObliviousDNSResponseBody, error) {
 	}, nil
 }
 
+func CreateObliviousDNSResponseBody(msg []byte, padding []byte) *ObliviousDNSResponseBody {
+	return &ObliviousDNSResponseBody{
+		DnsMessage: msg,
+		Padding:    padding,
+	}
+}
+
 type ObliviousDNSMessage struct {
 	MessageType      ObliviousMessageType
 	KeyID            []byte
