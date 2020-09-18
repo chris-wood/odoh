@@ -258,7 +258,7 @@ func TestResponseEncryption(t *testing.T) {
 		ResponseKey: responseSeed[:],
 	}
 
-	decryptedResponse, err := response.DecryptResponse(suite, aad, encryptedResponse)
+	decryptedResponse, err := response.DecryptResponse(suite, aad, encryptedResponse, query)
 	if err != nil {
 		t.Fatalf("Failed EncryptResponse: %s", err)
 	}
@@ -378,7 +378,7 @@ func TestSealQueryAndOpenAnswer(t *testing.T) {
 	aad := append([]byte{byte(ResponseType)}, responseKeyId...) // message_type = 0x02, with an empty keyID
 	encryptedAnswer, err := queryRequested.EncryptResponse(suite, aad, mockAnswerData)
 
-	response, err := queryContext.OpenAnswer(encryptedAnswer)
+	response, err := queryContext.OpenAnswer(*queryRequested, encryptedAnswer)
 
 	if !bytes.Equal(response, mockAnswerData) {
 		t.Fatalf("Decryption of the result doesnot match encrypted value")

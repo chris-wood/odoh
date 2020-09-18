@@ -85,12 +85,12 @@ func (m ObliviousDNSQuery) Message() []byte {
 
 func (m ObliviousDNSQuery) EncryptResponse(suite hpke.CipherSuite, aad, response []byte) ([]byte, error) {
 	// TODO(caw): we need to support other ciphersuites, so dispatch on `suite`
-	block, err := aes.NewCipher(m.ResponseSeed[:])
+	key, nonce := DeriveKeyNonce(suite, m)
+	block, err := aes.NewCipher(key)
 	if err != nil {
 		return nil, err
 	}
 
-	nonce := make([]byte, suite.AEAD.NonceSize())
 	aesgcm, err := cipher.NewGCM(block)
 	if err != nil {
 		return nil, err
@@ -105,14 +105,14 @@ type ObliviousDNSResponse struct {
 	ResponseKey []byte
 }
 
-func (r ObliviousDNSResponse) DecryptResponse(suite hpke.CipherSuite, aad, response []byte) ([]byte, error) {
+func (r ObliviousDNSResponse) DecryptResponse(suite hpke.CipherSuite, aad, response []byte, query ObliviousDNSQuery) ([]byte, error) {
 	// TODO(caw): we need to support other ciphersuites, so dispatch on `suite`
-	block, err := aes.NewCipher(r.ResponseKey)
+	key, nonce := DeriveKeyNonce(suite, query)
+	block, err := aes.NewCipher(key)
 	if err != nil {
 		return nil, err
 	}
 
-	nonce := make([]byte, suite.AEAD.NonceSize())
 	aesgcm, err := cipher.NewGCM(block)
 	if err != nil {
 		return nil, err
