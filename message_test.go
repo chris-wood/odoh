@@ -88,3 +88,52 @@ func TestObliviousDNSMessage_Unmarshal(t *testing.T) {
 		t.Fatalf("Failed to unmarshal the Encrypted Message Correctly.")
 	}
 }
+
+func TestObliviousDNSResponse_Marshal(t *testing.T) {
+	dnsMessage := []byte{0x01, 0x02, 0x03}
+	padding := []byte{0x00, 0x00, 0x00, 0x00}
+
+	odnsResponse := ObliviousDNSResponseBody{
+		DnsMessage: dnsMessage,
+		Padding:    padding,
+	}
+
+	serializedOdnsResponse := odnsResponse.Marshal()
+	expectation := []byte{
+		0x00, 0x03, 0x01, 0x02, 0x03,
+		0x00, 0x04, 0x00, 0x00, 0x00, 0x00,
+	}
+
+	if !bytes.Equal(serializedOdnsResponse, expectation) {
+		t.Fatalf("Failed to serialize ObliviousDNSResponseBody correctly.")
+	}
+}
+
+func TestObliviousDNSResponse_Unmarshal(t *testing.T) {
+	dnsMessage := []byte{0x01, 0x02, 0x03}
+	padding := []byte{0x00, 0x00, 0x00, 0x00}
+
+	odnsResponse := ObliviousDNSResponseBody{
+		DnsMessage: dnsMessage,
+		Padding:    padding,
+	}
+
+	expectation := []byte{
+		0x00, 0x03, 0x01, 0x02, 0x03,
+		0x00, 0x04, 0x00, 0x00, 0x00, 0x00,
+	}
+
+	unmarshaledOdnsResponse, err := UnmarshalDNSResponse(expectation)
+
+	if err != nil {
+		t.Fatalf("Failed to unmarshal ObliviousDNSResponseBody")
+	}
+
+	if !bytes.Equal(unmarshaledOdnsResponse.DnsMessage, odnsResponse.DnsMessage) {
+		t.Fatalf("Failed to unmarshal the ObliviousDNSResponseBody.DnsMessage correctly.")
+	}
+
+	if !bytes.Equal(unmarshaledOdnsResponse.Padding, odnsResponse.Padding) {
+		t.Fatalf("Failed to unmarshal the ObliviousDNSResponseBody.Padding correctly.")
+	}
+}

@@ -122,6 +122,38 @@ func (r ObliviousDNSResponse) DecryptResponse(suite hpke.CipherSuite, aad, respo
 	return plaintext, err
 }
 
+type ObliviousDNSResponseBody struct {
+	DnsMessage []byte 
+	Padding    []byte
+}
+
+func (m ObliviousDNSResponseBody) Marshal() []byte {
+	result := encodeLengthPrefixedSlice(m.DnsMessage)
+	result = append(result, encodeLengthPrefixedSlice(m.Padding)...)
+	return result
+}
+
+func UnmarshalDNSResponse(data []byte) (*ObliviousDNSResponseBody, error) {
+	if len(data) < 1 {
+		return nil, fmt.Errorf("Invalid data length: %d", len(data))
+	}
+
+	message, offset, err := decodeLengthPrefixedSlice(data)
+	if err != nil {
+		return nil, err
+	}
+
+	padding, offset, err := decodeLengthPrefixedSlice(data[offset:])
+	if err != nil {
+		return nil, err
+	}
+
+	return &ObliviousDNSResponseBody {
+		DnsMessage: message,
+		Padding: padding,
+	}, nil
+}
+
 type ObliviousDNSMessage struct {
 	MessageType      ObliviousMessageType
 	KeyID            []byte
