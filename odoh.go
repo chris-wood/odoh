@@ -262,8 +262,8 @@ func DeriveKeyNonce(suite hpke.CipherSuite, dnsQuery ObliviousDNSQuery) ([]byte,
 	nonce_info = append(nonce_info, context...)
 
 	prk := suite.KDF.Extract(nil, dnsQuery.ResponseSeed[:])
-	key := suite.KDF.Expand(prk, key_info, 16)
-	nonce := suite.KDF.Expand(prk, nonce_info, 12)
+	key := suite.KDF.Expand(prk, key_info, suite.AEAD.KeySize())
+	nonce := suite.KDF.Expand(prk, nonce_info, suite.AEAD.NonceSize())
 
 	return key, nonce
 }
@@ -271,19 +271,6 @@ func DeriveKeyNonce(suite hpke.CipherSuite, dnsQuery ObliviousDNSQuery) ([]byte,
 type QueryContext struct {
 	responseSeed [ResponseSeedLength]byte
 	publicKey    ObliviousDNSPublicKey
-}
-
-func lookupAeadKeySizeByAeadID(id hpke.AEADID) int {
-	switch id {
-	case hpke.AEAD_AESGCM128:
-		return 16
-	case hpke.AEAD_AESGCM256:
-		return 32
-	case hpke.AEAD_CHACHA20POLY1305:
-		return 32
-	default:
-		return 0
-	}
 }
 
 func createQueryContext(publicKey ObliviousDNSPublicKey) QueryContext {
