@@ -116,9 +116,9 @@ func TestQueryEncryption(t *testing.T) {
 	dnsMessage := []byte{0x01, 0x02}
 
 	message := ObliviousDNSQuery{
-		DnsMessage:  dnsMessage,
+		DnsMessage:   dnsMessage,
 		ResponseSeed: responseSeed,
-		Padding: nil,
+		Padding:      nil,
 	}
 
 	encryptedMessage, err := targetKey.EncryptQuery(message)
@@ -205,9 +205,9 @@ func Test_Sender_ODOHQueryEncryption(t *testing.T) {
 	dnsMessage := []byte{0x01, 0x02, 0x03}
 
 	message := ObliviousDNSQuery{
-		DnsMessage:  dnsMessage,
+		DnsMessage:   dnsMessage,
 		ResponseSeed: responseSeed,
-		Padding: nil,
+		Padding:      nil,
 	}
 
 	encryptedMessage, err := targetKey.EncryptQuery(message)
@@ -244,9 +244,9 @@ func TestResponseEncryption(t *testing.T) {
 	responseData := []byte("fake response")
 
 	query := ObliviousDNSQuery{
-		DnsMessage:  nil,
+		DnsMessage:   nil,
 		ResponseSeed: responseSeed,
-		Padding: nil,
+		Padding:      nil,
 	}
 
 	encryptedResponse, err := query.EncryptResponse(suite, aad, responseData)

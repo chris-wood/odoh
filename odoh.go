@@ -255,17 +255,17 @@ func DeriveKeyNonce(suite hpke.CipherSuite, dnsQuery ObliviousDNSQuery) ([]byte,
 	h.Write(dnsQuery.DnsMessage)
 	context := h.Sum(nil)
 
-    key_info := []byte("odoh key")
+	key_info := []byte("odoh key")
 	key_info = append(key_info, context...)
-	
+
 	nonce_info := []byte("odoh nonce")
 	nonce_info = append(nonce_info, context...)
-	
+
 	prk := suite.KDF.Extract(nil, dnsQuery.ResponseSeed[:])
 	key := suite.KDF.Expand(prk, key_info, 16)
 	nonce := suite.KDF.Expand(prk, nonce_info, 12)
 
-    return key, nonce
+	return key, nonce
 }
 
 type QueryContext struct {

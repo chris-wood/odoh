@@ -60,14 +60,14 @@ func UnmarshalQueryBody(data []byte) (*ObliviousDNSQuery, error) {
 	if err != nil {
 		return nil, err
 	}
-	
-	if offset + int(ResponseSeedLength) > len(data) {
+
+	if offset+int(ResponseSeedLength) > len(data) {
 		return nil, fmt.Errorf("Invalid response seed length")
 	}
 	var seed [ResponseSeedLength]byte
-	copy(seed[:], data[offset : offset + int(ResponseSeedLength)])
+	copy(seed[:], data[offset:offset+int(ResponseSeedLength)])
 
-	padding, offset, err := decodeLengthPrefixedSlice(data[offset + int(ResponseSeedLength):])
+	padding, offset, err := decodeLengthPrefixedSlice(data[offset+int(ResponseSeedLength):])
 	if err != nil {
 		return nil, err
 	}
@@ -75,7 +75,7 @@ func UnmarshalQueryBody(data []byte) (*ObliviousDNSQuery, error) {
 	return &ObliviousDNSQuery{
 		DnsMessage:   message,
 		ResponseSeed: seed,
-		Padding: padding,
+		Padding:      padding,
 	}, nil
 }
 
@@ -123,7 +123,7 @@ func (r ObliviousDNSResponse) DecryptResponse(suite hpke.CipherSuite, aad, respo
 }
 
 type ObliviousDNSResponseBody struct {
-	DnsMessage []byte 
+	DnsMessage []byte
 	Padding    []byte
 }
 
@@ -148,9 +148,9 @@ func UnmarshalDNSResponse(data []byte) (*ObliviousDNSResponseBody, error) {
 		return nil, err
 	}
 
-	return &ObliviousDNSResponseBody {
+	return &ObliviousDNSResponseBody{
 		DnsMessage: message,
-		Padding: padding,
+		Padding:    padding,
 	}, nil
 }
 
