@@ -21,7 +21,7 @@ func Test_Golang_Encryption_For_Rust_Decryption(t *testing.T) {
 		Go lang based client using the odoh library first uses the public key given by a rust target server
 		and encrypts the message. The goal of this test is to assert the following:
 
-		1. A valid serialized ObliviousDNSPublicKey from Rust can be converted into the corresponding object.
+		1. A valid serialized ObliviousDoHConfigContents from Rust can be converted into the corresponding object.
 		2. The encryption of a message can happen successfully.
 	*/
 
@@ -34,7 +34,7 @@ func Test_Golang_Encryption_For_Rust_Decryption(t *testing.T) {
 
 	fmt.Printf("%v\n", rustProvidedPublicKeyBytes)
 
-	odohPkFromRustBytes := UnMarshalObliviousDNSPublicKey(rustProvidedPublicKeyBytes)
+	odohPkFromRustBytes := UnmarshalObliviousDoHConfigContents(rustProvidedPublicKeyBytes)
 
 	fmt.Printf("ODOH PK : %v\n", odohPkFromRustBytes)
 }
@@ -62,7 +62,7 @@ func Test_Golang_ODOH_KeyPair_Generation_and_Serialize(t *testing.T) {
 		t.Fatalf("[%x, %x, %x] Error generating DH key pair: %s", kemID, kdfID, aeadID, err)
 	}
 
-	targetKey := ObliviousDNSPublicKey{
+	targetKey := ObliviousDoHConfigContents{
 		KemID:          kemID,
 		KdfID:          kdfID,
 		AeadID:         aeadID,
