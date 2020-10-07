@@ -38,6 +38,8 @@ import (
 const (
 	outputTestVectorEnvironmentKey = "ODOH_TEST_VECTORS_OUT"
 	inputTestVectorEnvironmentKey  = "ODOH_TEST_VECTORS_IN"
+	numTransactions                = 2
+	baseQuerySize                  = 32
 )
 
 func TestQueryBodyMarshal(t *testing.T) {
@@ -466,8 +468,8 @@ func generateRandomData(n int) []byte {
 	return data
 }
 
-func generateTransaction(t *testing.T, kp ObliviousDNSKeyPair) transactionTestVector {
-	mockQuery := generateRandomData(40)
+func generateTransaction(t *testing.T, kp ObliviousDNSKeyPair, querySize int) transactionTestVector {
+	mockQuery := generateRandomData(querySize)
 	mockAnswer := append(mockQuery, mockQuery...) // answer = query || query
 
 	// Run the query/response transaction
@@ -494,14 +496,17 @@ func generateTestVector(t *testing.T, kem_id hpke.KEMID, kdf_id hpke.KDFID, aead
 		t.Fatalf("Unable to create a Key Pair")
 	}
 
-	transaction := generateTransaction(t, kp)
+	transactions := make([]transactionTestVector, numTransactions)
+	for i := 0; i < numTransactions; i++ {
+		transactions[i] = generateTransaction(t, kp, (i+1)*baseQuerySize)
+	}
 
 	vector := testVector{
 		t:               t,
 		odoh_config:     kp.Config.Marshal(),
 		public_key_seed: kp.Seed,
 		key_id:          kp.Config.Contents.KeyID(),
-		transactions:    []transactionTestVector{transaction},
+		transactions:    transactions,
 	}
 
 	return vector
@@ -563,6 +568,7 @@ func verifyTestVectors(t *testing.T, vectorString []byte, subtest bool) {
 }
 
 func TestVectorGenerate(t *testing.T) {
+	// This is the mandatory HPKE ciphersuite
 	supportedKEMs := []hpke.KEMID{hpke.DHKEM_X25519}
 	supportedKDFs := []hpke.KDFID{hpke.KDF_HKDF_SHA256}
 	supportedAEADs := []hpke.AEADID{hpke.AEAD_AESGCM128}
