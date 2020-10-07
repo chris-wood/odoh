@@ -97,8 +97,8 @@ func UnmarshalQueryBody(data []byte) (*ObliviousDNSQuery, error) {
 
 //
 // struct {
-//    opaque key_id<0..2^16-1>;
 //    uint8  message_type;
+//    opaque key_id<0..2^16-1>;
 //    opaque encrypted_message<1..2^16-1>;
 // } ObliviousDoHMessage;
 //
