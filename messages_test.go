@@ -13,14 +13,51 @@ func TestObliviousMessageMarshalEmptyKeyId(t *testing.T) {
 		EncryptedMessage: testMessage,
 	}
 
-	marshaled_query := message.Marshal()
-	expected_bytes := []byte{
-		0xFF,
-		0x00, 0x00,
-		0x00, 0x04}
-	expected_bytes = append(expected_bytes, testMessage...)
-	if !bytes.Equal(marshaled_query, expected_bytes) {
-		t.Fatalf("Marshalling mismatch in the encoding. Got %x, received %x", marshaled_query, expected_bytes)
+	serializedMessage := message.Marshal()
+	expectedBytes := []byte{0xFF}
+	expectedBytes = append(expectedBytes, []byte{0x00, 0x00}...) // empty key ID
+	expectedBytes = append(expectedBytes, []byte{0x00, 0x04}...) // non-empty message
+	expectedBytes = append(expectedBytes, testMessage...)
+	if !bytes.Equal(serializedMessage, expectedBytes) {
+		t.Fatalf("Marshalling mismatch in the encoding. Got %x, received %x", serializedMessage, expectedBytes)
+	}
+}
+
+func TestObliviousMessageMarshalEmptyMessage(t *testing.T) {
+	testKeyId := []byte{0x02, 0x03}
+	message := ObliviousDNSMessage{
+		MessageType:      0xFF,
+		KeyID:            testKeyId,
+		EncryptedMessage: nil,
+	}
+
+	serializedMessage := message.Marshal()
+	expectedBytes := []byte{0xFF}
+	expectedBytes = append(expectedBytes, []byte{0x00, 0x02}...) // non-empty key ID
+	expectedBytes = append(expectedBytes, testKeyId...)
+	expectedBytes = append(expectedBytes, []byte{0x00, 0x00}...) // empty message
+	if !bytes.Equal(serializedMessage, expectedBytes) {
+		t.Fatalf("Marshalling mismatch in the encoding. Got %x, received %x", serializedMessage, expectedBytes)
+	}
+}
+
+func TestObliviousMessageMarshalNonEmptyKeyId(t *testing.T) {
+	testMessage := []byte{0x06, 0x07, 0x08, 0x09}
+	testKeyId := []byte{0x02, 0x03}
+	message := ObliviousDNSMessage{
+		MessageType:      0xFF,
+		KeyID:            testKeyId,
+		EncryptedMessage: testMessage,
+	}
+
+	serializedMessage := message.Marshal()
+	expectedBytes := []byte{0xFF}
+	expectedBytes = append(expectedBytes, []byte{0x00, 0x02}...) // non-empty key ID
+	expectedBytes = append(expectedBytes, testKeyId...)
+	expectedBytes = append(expectedBytes, []byte{0x00, 0x04}...) // non-empty message
+	expectedBytes = append(expectedBytes, testMessage...)
+	if !bytes.Equal(serializedMessage, expectedBytes) {
+		t.Fatalf("Marshalling mismatch in the encoding. Got %x, received %x", serializedMessage, expectedBytes)
 	}
 }
 
@@ -28,12 +65,12 @@ func TestObliviousDoHQueryNoPaddingMarshal(t *testing.T) {
 	dnsMessage := []byte{0x06, 0x07, 0x08, 0x09}
 	query := CreateObliviousDNSQuery(dnsMessage, 0)
 
-	marshaled_query := query.Marshal()
-	expected_bytes := []byte{
+	serializedMessage := query.Marshal()
+	expectedBytes := []byte{
 		0x00, 0x04,
 		0x06, 0x07, 0x08, 0x09,
 		0x00, 0x00}
-	if !bytes.Equal(marshaled_query, expected_bytes) {
+	if !bytes.Equal(serializedMessage, expectedBytes) {
 		t.Fatalf("Marshalling mismatch in the encoding.")
 	}
 }
@@ -45,13 +82,13 @@ func TestObliviousDoHQueryPaddingMarshal(t *testing.T) {
 	paddedBytes := make([]byte, paddingLength)
 	query := CreateObliviousDNSQuery(dnsMessage, paddingLength)
 
-	marshaled_query := query.Marshal()
-	expected_bytes := []byte{
+	serializedMessage := query.Marshal()
+	expectedBytes := []byte{
 		0x00, 0x04,
 		0x06, 0x07, 0x08, 0x09,
 		0x00, uint8(paddingLength)}
-	expected_bytes = append(expected_bytes, paddedBytes...)
-	if !bytes.Equal(marshaled_query, expected_bytes) {
+	expectedBytes = append(expectedBytes, paddedBytes...)
+	if !bytes.Equal(serializedMessage, expectedBytes) {
 		t.Fatalf("Marshalling mismatch in the encoding.")
 	}
 }
@@ -67,15 +104,15 @@ func TestObliviousDoHMessage_Marshal(t *testing.T) {
 		EncryptedMessage: encryptedMessage,
 	}
 
-	serialized_odns_message := odnsMessage.Marshal()
-	expectation := []byte{0x01,
+	serializedMessage := odnsMessage.Marshal()
+	expectedBytes := []byte{0x01,
 		0x00, 0x05,
 		0x00, 0x01, 0x02, 0x03, 0x04,
 		0x00, 0x0B,
 		0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F}
 
-	if !bytes.Equal(serialized_odns_message, expectation) {
-		t.Fatalf("Failed to serialize correctly. Got %x, expected %x", serialized_odns_message, expectation)
+	if !bytes.Equal(serializedMessage, expectedBytes) {
+		t.Fatalf("Failed to serialize correctly. Got %x, expected %x", serializedMessage, expectedBytes)
 	}
 }
 
@@ -90,27 +127,27 @@ func TestObliviousDoHMessage_Unmarshal(t *testing.T) {
 		EncryptedMessage: encryptedMessage,
 	}
 
-	expectation := []byte{0x01,
+	expectedBytes := []byte{0x01,
 		0x00, 0x05,
 		0x00, 0x01, 0x02, 0x03, 0x04,
 		0x00, 0x0B,
 		0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F}
 
-	unmarshaled_odnsMessage, err := UnmarshalDNSMessage(expectation)
+	deserializedMessage, err := UnmarshalDNSMessage(expectedBytes)
 
 	if err != nil {
 		t.Fatalf("Failed to unmarshal ObliviousDNSMessage")
 	}
 
-	if !(unmarshaled_odnsMessage.MessageType == odnsMessage.MessageType) {
+	if !(deserializedMessage.MessageType == odnsMessage.MessageType) {
 		t.Fatalf("Message type mismatch after unmarshaling")
 	}
 
-	if !bytes.Equal(unmarshaled_odnsMessage.KeyID, odnsMessage.KeyID) {
+	if !bytes.Equal(deserializedMessage.KeyID, odnsMessage.KeyID) {
 		t.Fatalf("Failed to unmarshal the KeyID correctly.")
 	}
 
-	if !bytes.Equal(unmarshaled_odnsMessage.EncryptedMessage, odnsMessage.EncryptedMessage) {
+	if !bytes.Equal(deserializedMessage.EncryptedMessage, odnsMessage.EncryptedMessage) {
 		t.Fatalf("Failed to unmarshal the Encrypted Message Correctly.")
 	}
 }
