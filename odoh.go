@@ -49,9 +49,35 @@ type ObliviousDoHConfigContents struct {
 	PublicKeyBytes []byte
 }
 
+func CreateObliviousDoHConfigContents(kemID hpke.KEMID, kdfID hpke.KDFID, aeadID hpke.AEADID, publicKeyBytes []byte) (ObliviousDoHConfigContents, error) {
+	suite, err := hpke.AssembleCipherSuite(kemID, kdfID, aeadID)
+	if err != nil {
+		return ObliviousDoHConfigContents{}, err
+	}
+
+	_, err = suite.KEM.Deserialize(publicKeyBytes)
+	if err != nil {
+		return ObliviousDoHConfigContents{}, err
+	}
+
+	return ObliviousDoHConfigContents{
+		KemID:          kemID,
+		KdfID:          kdfID,
+		AeadID:         aeadID,
+		PublicKeyBytes: publicKeyBytes,
+	}, nil
+}
+
 type ObliviousDoHConfig struct {
 	Version  uint16
 	Contents ObliviousDoHConfigContents
+}
+
+func CreateObliviousDoHConfig(contents ObliviousDoHConfigContents) ObliviousDoHConfig {
+	return ObliviousDoHConfig{
+		Version:  ODOH_VERSION,
+		Contents: contents,
+	}
 }
 
 func (c ObliviousDoHConfig) Marshal() []byte {
