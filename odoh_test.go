@@ -293,7 +293,8 @@ func TestSealQueryAndOpenAnswer(t *testing.T) {
 
 	_, responseContext, err := kp.DecryptQuery(encryptedData)
 
-	encryptedAnswer, err := responseContext.EncryptResponse(mockAnswerData)
+	mockResponse := CreateObliviousDNSResponse(mockAnswerData, 0)
+	encryptedAnswer, err := responseContext.EncryptResponse(mockResponse)
 
 	response, err := queryContext.OpenAnswer(encryptedAnswer)
 
@@ -487,7 +488,9 @@ func generateTransaction(t *testing.T, kp ObliviousDNSKeyPair, querySize int) tr
 	// Run the query/response transaction
 	obliviousQuery, queryContext, err := SealQuery(mockQuery, kp.Config.Contents)
 	_, responseContext, err := kp.DecryptQuery(obliviousQuery)
-	obliviousResponse, err := responseContext.EncryptResponse(mockAnswer)
+
+	mockResponse := CreateObliviousDNSResponse(mockAnswer, 0)
+	obliviousResponse, err := responseContext.EncryptResponse(mockResponse)
 	response, err := queryContext.OpenAnswer(obliviousResponse)
 
 	if err != nil || !bytes.Equal(response, mockAnswer) {
@@ -542,7 +545,8 @@ func verifyTestVector(t *testing.T, tv testVector) {
 		assertNotError(t, "Query decryption failed", err)
 		assertBytesEqual(t, "Query decryption mismatch", query.DnsMessage, transaction.query)
 
-		obliviousResponse, err := responseContext.EncryptResponse(transaction.response)
+		testResponse := CreateObliviousDNSResponse(transaction.response, 0)
+		obliviousResponse, err := responseContext.EncryptResponse(testResponse)
 		assertNotError(t, "Response encryption failed", err)
 		assertBytesEqual(t, "Response encryption mismatch", obliviousResponse.Marshal(), transaction.obliviousResponse.Marshal())
 
@@ -554,7 +558,7 @@ func verifyTestVector(t *testing.T, tv testVector) {
 		}
 		response, err := queryContext.OpenAnswer(obliviousResponse)
 		assertNotError(t, "Response decryption failed", err)
-		assertBytesEqual(t, "Response encryption mismatch", response, transaction.response)
+		assertBytesEqual(t, "Final response encryption mismatch", response, transaction.response)
 	}
 }
 

@@ -95,6 +95,29 @@ func UnmarshalQueryBody(data []byte) (*ObliviousDNSQuery, error) {
 	return &ObliviousDNSQuery{msg}, nil
 }
 
+type ObliviousDNSResponse struct {
+	ObliviousDNSMessageBody
+}
+
+func CreateObliviousDNSResponse(response []byte, paddingBytes int) *ObliviousDNSResponse {
+	msg := ObliviousDNSMessageBody{
+		DnsMessage: response,
+		Padding:    make([]byte, paddingBytes),
+	}
+	return &ObliviousDNSResponse{
+		msg,
+	}
+}
+
+func UnmarshalResponseBody(data []byte) (*ObliviousDNSResponse, error) {
+	msg, err := UnmarshalMessageBody(data)
+	if err != nil {
+		return nil, err
+	}
+
+	return &ObliviousDNSResponse{msg}, nil
+}
+
 //
 // struct {
 //    uint8  message_type;

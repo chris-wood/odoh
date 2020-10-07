@@ -275,7 +275,7 @@ type ResponseContext struct {
 	odohSecret []byte
 }
 
-func (c ResponseContext) EncryptResponse(response []byte) (ObliviousDNSMessage, error) {
+func (c ResponseContext) EncryptResponse(response *ObliviousDNSResponse) (ObliviousDNSMessage, error) {
 	aad := append([]byte{byte(ResponseType)}, []byte{0x00, 0x00}...) // 0-length encoded KeyID
 
 	odohPRK := c.suite.KDF.Extract(c.query, c.odohSecret)
@@ -287,7 +287,7 @@ func (c ResponseContext) EncryptResponse(response []byte) (ObliviousDNSMessage, 
 		return ObliviousDNSMessage{}, err
 	}
 
-	ciphertext := aead.Seal(nil, nonce, response, aad)
+	ciphertext := aead.Seal(nil, nonce, response.Marshal(), aad)
 
 	odohMessage := ObliviousDNSMessage{
 		KeyID:            nil,
@@ -406,9 +406,15 @@ func (c QueryContext) OpenAnswer(odohResponse ObliviousDNSMessage) ([]byte, erro
 		return nil, errors.New("answer is not a valid response type")
 	}
 
-	decryptedResponse, err := c.DecryptResponse(odohResponse)
+	decryptedResponseBytes, err := c.DecryptResponse(odohResponse)
 	if err != nil {
 		return nil, errors.New("unable to decrypt the obtained response using the symmetric key sent")
 	}
-	return decryptedResponse, nil
+
+	decryptedResponse, err := UnmarshalResponseBody(decryptedResponseBytes)
+	if err != nil {
+		return nil, err
+	}
+
+	return decryptedResponse.DnsMessage, nil
 }
