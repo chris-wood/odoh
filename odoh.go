@@ -255,8 +255,7 @@ type QueryContext struct {
 }
 
 func (c QueryContext) DecryptResponse(message ObliviousDNSMessage) ([]byte, error) {
-	responseKeyId := []byte{0x00, 0x00} // 0-length encoded KeyID
-	aad := append([]byte{byte(ResponseType)}, responseKeyId...)
+	aad := append([]byte{byte(ResponseType)}, []byte{0x00, 0x00}...) // 0-length encoded KeyID
 
 	odohPRK := c.suite.KDF.Extract(c.query, c.odohSecret)
 	key := c.suite.KDF.Expand(odohPRK, []byte(ODOH_LABEL_KEY), c.suite.AEAD.KeySize())
@@ -277,8 +276,7 @@ type ResponseContext struct {
 }
 
 func (c ResponseContext) EncryptResponse(response []byte) (ObliviousDNSMessage, error) {
-	responseKeyId := []byte{0x00, 0x00} // 0-length encoded KeyID
-	aad := append([]byte{byte(ResponseType)}, responseKeyId...)
+	aad := append([]byte{byte(ResponseType)}, []byte{0x00, 0x00}...) // 0-length encoded KeyID
 
 	odohPRK := c.suite.KDF.Extract(c.query, c.odohSecret)
 	key := c.suite.KDF.Expand(odohPRK, []byte(ODOH_LABEL_KEY), c.suite.AEAD.KeySize())
@@ -292,7 +290,7 @@ func (c ResponseContext) EncryptResponse(response []byte) (ObliviousDNSMessage, 
 	ciphertext := aead.Seal(nil, nonce, response, aad)
 
 	odohMessage := ObliviousDNSMessage{
-		KeyID:            responseKeyId,
+		KeyID:            nil,
 		MessageType:      ResponseType,
 		EncryptedMessage: ciphertext,
 	}

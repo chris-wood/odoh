@@ -5,6 +5,25 @@ import (
 	"testing"
 )
 
+func TestObliviousMessageMarshalEmptyKeyId(t *testing.T) {
+	testMessage := []byte{0x06, 0x07, 0x08, 0x09}
+	message := ObliviousDNSMessage{
+		MessageType:      0xFF,
+		KeyID:            nil,
+		EncryptedMessage: testMessage,
+	}
+
+	marshaled_query := message.Marshal()
+	expected_bytes := []byte{
+		0xFF,
+		0x00, 0x00,
+		0x00, 0x04}
+	expected_bytes = append(expected_bytes, testMessage...)
+	if !bytes.Equal(marshaled_query, expected_bytes) {
+		t.Fatalf("Marshalling mismatch in the encoding. Got %x, received %x", marshaled_query, expected_bytes)
+	}
+}
+
 func TestObliviousDoHQueryNoPaddingMarshal(t *testing.T) {
 	dnsMessage := []byte{0x06, 0x07, 0x08, 0x09}
 	query := CreateObliviousDNSQuery(dnsMessage, 0)
