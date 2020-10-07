@@ -398,6 +398,9 @@ func (etv *transactionTestVector) UnmarshalJSON(data []byte) error {
 }
 
 type rawTestVector struct {
+	KemID         int    `json:"kem_id"`
+	KdfID         int    `json:"kdf_id"`
+	AeadID        int    `json:"aead_id"`
 	Config        string `json:"odohconfig"`
 	PublicKeySeed string `json:"public_key_seed"`
 	KeyId         string `json:"key_id"`
@@ -407,6 +410,9 @@ type rawTestVector struct {
 
 type testVector struct {
 	t               *testing.T
+	kem_id          hpke.KEMID
+	kdf_id          hpke.KDFID
+	aead_id         hpke.AEADID
 	odoh_config     []byte
 	public_key_seed []byte
 	key_id          []byte
@@ -416,6 +422,9 @@ type testVector struct {
 
 func (tv testVector) MarshalJSON() ([]byte, error) {
 	return json.Marshal(rawTestVector{
+		KemID:         int(tv.kem_id),
+		KdfID:         int(tv.kdf_id),
+		AeadID:        int(tv.aead_id),
 		Config:        mustHex(tv.odoh_config),
 		PublicKeySeed: mustHex(tv.public_key_seed),
 		KeyId:         mustHex(tv.key_id),
@@ -430,6 +439,9 @@ func (tv *testVector) UnmarshalJSON(data []byte) error {
 		return err
 	}
 
+	tv.kem_id = hpke.KEMID(raw.KemID)
+	tv.kdf_id = hpke.KDFID(raw.KdfID)
+	tv.aead_id = hpke.AEADID(raw.AeadID)
 	tv.public_key_seed = mustUnhex(tv.t, raw.PublicKeySeed)
 	tv.odoh_config = mustUnhex(tv.t, raw.Config)
 	tv.key_id = mustUnhex(tv.t, raw.KeyId)
@@ -503,6 +515,9 @@ func generateTestVector(t *testing.T, kem_id hpke.KEMID, kdf_id hpke.KDFID, aead
 
 	vector := testVector{
 		t:               t,
+		kem_id:          kem_id,
+		kdf_id:          kdf_id,
+		aead_id:         aead_id,
 		odoh_config:     kp.Config.Marshal(),
 		public_key_seed: kp.Seed,
 		key_id:          kp.Config.Contents.KeyID(),
