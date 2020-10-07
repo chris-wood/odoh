@@ -35,10 +35,11 @@ const (
 	ODOH_VERSION       = uint16(0x0001)
 	ODOH_SECRET_LENGTH = 32
 	ODOH_PADDING_BYTE  = uint8(0)
-	ODOH_LABEL_KEY    = "odoh key"
-	ODOH_LABEL_NONCE  = "odoh nonce"
-	ODOH_LABEL_SECRET = "odoh secret"
-	ODOH_LABEL_QUERY  = "odoh query"
+	ODOH_LABEL_KEY_ID  = "odoh key id"
+	ODOH_LABEL_KEY     = "odoh key"
+	ODOH_LABEL_NONCE   = "odoh nonce"
+	ODOH_LABEL_SECRET  = "odoh secret"
+	ODOH_LABEL_QUERY   = "odoh query"
 )
 
 type ObliviousDoHConfigContents struct {
@@ -93,7 +94,7 @@ func (k ObliviousDoHConfigContents) KeyID() []byte {
 	config := append(identifiers, k.PublicKeyBytes...)
 
 	prk := suite.KDF.Extract(nil, config)
-	identifier := suite.KDF.Expand(prk, []byte("odoh_key_id"), suite.KDF.OutputSize())
+	identifier := suite.KDF.Expand(prk, []byte(ODOH_LABEL_KEY_ID), suite.KDF.OutputSize())
 
 	return identifier
 }
@@ -254,8 +255,8 @@ type QueryContext struct {
 }
 
 func (c QueryContext) DecryptResponse(message ObliviousDNSMessage) ([]byte, error) {
-	responseKeyId := []byte{0x00, 0x00}
-	aad := append([]byte{0x02}, responseKeyId...) // TODO(caw): use actual enum value
+	responseKeyId := []byte{0x00, 0x00} // 0-length encoded KeyID
+	aad := append([]byte{byte(ResponseType)}, responseKeyId...)
 
 	odohPRK := c.suite.KDF.Extract(c.query, c.odohSecret)
 	key := c.suite.KDF.Expand(odohPRK, []byte(ODOH_LABEL_KEY), c.suite.AEAD.KeySize())
@@ -276,8 +277,8 @@ type ResponseContext struct {
 }
 
 func (c ResponseContext) EncryptResponse(response []byte) (ObliviousDNSMessage, error) {
-	responseKeyId := []byte{0x00, 0x00}
-	aad := append([]byte{0x02}, responseKeyId...) // TODO(caw): use actual enum value
+	responseKeyId := []byte{0x00, 0x00} // 0-length encoded KeyID
+	aad := append([]byte{byte(ResponseType)}, responseKeyId...)
 
 	odohPRK := c.suite.KDF.Extract(c.query, c.odohSecret)
 	key := c.suite.KDF.Expand(odohPRK, []byte(ODOH_LABEL_KEY), c.suite.AEAD.KeySize())
@@ -315,8 +316,13 @@ func (targetKey ObliviousDoHConfigContents) EncryptQuery(query *ObliviousDNSQuer
 		return ObliviousDNSMessage{}, QueryContext{}, err
 	}
 
+	keyID := targetKey.KeyID()
+	keyIDLength := make([]byte, 2)
+	binary.BigEndian.PutUint16(keyIDLength, uint16(len(keyID)))
+	aad := append([]byte{byte(QueryType)}, keyIDLength...)
+	aad = append(aad, keyID...)
+
 	encodedMessage := query.Marshal()
-	aad := append([]byte{0x01}, targetKey.KeyID()...)
 	ct := ctxI.Seal(aad, encodedMessage)
 	odohSecret := ctxI.Export([]byte(ODOH_LABEL_SECRET), ODOH_SECRET_LENGTH)
 
@@ -357,7 +363,11 @@ func (privateKey ObliviousDNSKeyPair) DecryptQuery(message ObliviousDNSMessage) 
 
 	odohSecret := ctxR.Export([]byte(ODOH_LABEL_SECRET), ODOH_SECRET_LENGTH)
 
-	aad := append([]byte{byte(QueryType)}, privateKey.Config.Contents.KeyID()...)
+	keyID := privateKey.Config.Contents.KeyID()
+	keyIDLength := make([]byte, 2)
+	binary.BigEndian.PutUint16(keyIDLength, uint16(len(keyID)))
+	aad := append([]byte{byte(QueryType)}, keyIDLength...)
+	aad = append(aad, keyID...)
 
 	dnsMessage, err := ctxR.Open(aad, ct)
 	if err != nil {
