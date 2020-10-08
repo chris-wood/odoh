@@ -32,7 +32,7 @@ import (
 )
 
 const (
-	ODOH_VERSION       = uint16(0x0001)
+	ODOH_VERSION       = uint16(0xff02)
 	ODOH_SECRET_LENGTH = 32
 	ODOH_PADDING_BYTE  = uint8(0)
 	ODOH_LABEL_KEY_ID  = "odoh key id"
@@ -371,6 +371,10 @@ func validateMessagePadding(padding []byte) bool {
 }
 
 func (privateKey ObliviousDNSKeyPair) DecryptQuery(message ObliviousDNSMessage) (*ObliviousDNSQuery, ResponseContext, error) {
+	if message.MessageType != QueryType {
+		return nil, ResponseContext{}, errors.New("message is not a query")
+	}
+
 	suite, err := hpke.AssembleCipherSuite(privateKey.Config.Contents.KemID, privateKey.Config.Contents.KdfID, privateKey.Config.Contents.AeadID)
 	if err != nil {
 		return nil, ResponseContext{}, err
@@ -427,12 +431,12 @@ func SealQuery(dnsQuery []byte, publicKey ObliviousDoHConfigContents) (Oblivious
 	return odohMessage, queryContext, nil
 }
 
-func (c QueryContext) OpenAnswer(odohResponse ObliviousDNSMessage) ([]byte, error) {
-	if odohResponse.MessageType != ResponseType {
-		return nil, errors.New("answer is not a valid response type")
+func (c QueryContext) OpenAnswer(message ObliviousDNSMessage) ([]byte, error) {
+	if message.MessageType != ResponseType {
+		return nil, errors.New("message is not a response")
 	}
 
-	decryptedResponseBytes, err := c.DecryptResponse(odohResponse)
+	decryptedResponseBytes, err := c.DecryptResponse(message)
 	if err != nil {
 		return nil, errors.New("unable to decrypt the obtained response using the symmetric key sent")
 	}
