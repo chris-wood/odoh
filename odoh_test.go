@@ -42,6 +42,25 @@ const (
 	baseQuerySize                  = 32
 )
 
+func TestConfigSerialization(t *testing.T) {
+	keyPair, err := CreateDefaultKeyPair()
+	if err != nil {
+		t.Fatalf("CreateDefaultKeyPair failed")
+	}
+
+	derivedKeyPair, err := CreateDefaultKeyPairFromSeed(keyPair.Seed)
+	if err != nil {
+		t.Fatalf("CreateDefaultKeyPair failed")
+	}
+
+	if !bytes.Equal(keyPair.Config.Marshal(), derivedKeyPair.Config.Marshal()) {
+		t.Fatalf("Mismatched configs.")
+	}
+	if !bytes.Equal(keyPair.Seed, derivedKeyPair.Seed) {
+		t.Fatalf("Mismatched configs.")
+	}
+}
+
 func TestQueryBodyMarshal(t *testing.T) {
 	message := []byte{0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F}
 
@@ -258,12 +277,12 @@ func TestFixedOdohKeyPairCreation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Unable to decode seed to bytes")
 	}
-	keyPair, err := DeriveFixedKeyPairFromSeed(kemID, kdfID, aeadID, seed)
+	keyPair, err := CreateKeyPairFromSeed(kemID, kdfID, aeadID, seed)
 	if err != nil {
 		t.Fatalf("Unable to derive a ObliviousDoHKeyPair")
 	}
 	for i := 0; i < 10; i++ {
-		keyPairDerived, err := DeriveFixedKeyPairFromSeed(kemID, kdfID, aeadID, seed)
+		keyPairDerived, err := CreateKeyPairFromSeed(kemID, kdfID, aeadID, seed)
 		if err != nil {
 			t.Fatalf("Unable to derive a ObliviousDoHKeyPair")
 		}
@@ -522,7 +541,7 @@ func generateTestVector(t *testing.T, kem_id hpke.KEMID, kdf_id hpke.KDFID, aead
 		kdf_id:          kdf_id,
 		aead_id:         aead_id,
 		odoh_config:     kp.Config.Marshal(),
-		public_key_seed: kp.seed,
+		public_key_seed: kp.Seed,
 		key_id:          kp.Config.Contents.KeyID(),
 		transactions:    transactions,
 	}
@@ -534,8 +553,8 @@ func verifyTestVector(t *testing.T, tv testVector) {
 	config, err := UnmarshalObliviousDoHConfig(tv.odoh_config)
 	assertNotError(t, "UnmarshalObliviousDoHConfigContents failed", err)
 
-	kp, err := DeriveFixedKeyPairFromSeed(config.Contents.KemID, config.Contents.KdfID, config.Contents.AeadID, tv.public_key_seed)
-	assertNotError(t, "DeriveFixedKeyPairFromSeed failed", err)
+	kp, err := CreateKeyPairFromSeed(config.Contents.KemID, config.Contents.KdfID, config.Contents.AeadID, tv.public_key_seed)
+	assertNotError(t, "CreateKeyPairFromSeed failed", err)
 
 	expectedKeyId := kp.Config.Contents.KeyID()
 	assertBytesEqual(t, "KeyID mismatch", expectedKeyId, tv.key_id)

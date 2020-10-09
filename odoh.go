@@ -221,19 +221,10 @@ func (k ObliviousDoHConfigContents) CipherSuite() (hpke.CipherSuite, error) {
 type ObliviousDoHKeyPair struct {
 	Config    ObliviousDoHConfig
 	secretKey hpke.KEMPrivateKey
-	seed      []byte
+	Seed      []byte
 }
 
-func (k ObliviousDoHKeyPair) SerializePrivateKey() ([]byte, error) {
-	suite, err := hpke.AssembleCipherSuite(k.Config.Contents.KemID, k.Config.Contents.KdfID, k.Config.Contents.AeadID)
-	if err != nil {
-		return nil, err
-	}
-
-	return suite.KEM.SerializePrivate(k.secretKey), nil
-}
-
-func DeriveFixedKeyPairFromSeed(kemID hpke.KEMID, kdfID hpke.KDFID, aeadID hpke.AEADID, ikm []byte) (ObliviousDoHKeyPair, error) {
+func CreateKeyPairFromSeed(kemID hpke.KEMID, kdfID hpke.KDFID, aeadID hpke.AEADID, ikm []byte) (ObliviousDoHKeyPair, error) {
 	suite, err := hpke.AssembleCipherSuite(kemID, kdfID, aeadID)
 	if err != nil {
 		return ObliviousDoHKeyPair{}, err
@@ -256,8 +247,12 @@ func DeriveFixedKeyPairFromSeed(kemID hpke.KEMID, kdfID hpke.KDFID, aeadID hpke.
 	return ObliviousDoHKeyPair{
 		Config:    config,
 		secretKey: sk,
-		seed:      ikm,
+		Seed:      ikm,
 	}, nil
+}
+
+func CreateDefaultKeyPairFromSeed(seed []byte) (ObliviousDoHKeyPair, error) {
+	return CreateKeyPairFromSeed(ODOH_DEFAULT_KEMID, ODOH_DEFAULT_KDFID, ODOH_DEFAULT_AEADID, seed)
 }
 
 func CreateKeyPair(kemID hpke.KEMID, kdfID hpke.KDFID, aeadID hpke.AEADID) (ObliviousDoHKeyPair, error) {
