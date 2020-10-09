@@ -236,6 +236,7 @@ func CreateKeyPairFromSeed(kemID hpke.KEMID, kdfID hpke.KDFID, aeadID hpke.AEADI
 	}
 
 	config := ObliviousDoHConfig{
+		Version: ODOH_VERSION,
 		Contents: ObliviousDoHConfigContents{
 			KemID:          kemID,
 			KdfID:          kdfID,
@@ -269,6 +270,7 @@ func CreateKeyPair(kemID hpke.KEMID, kdfID hpke.KDFID, aeadID hpke.AEADID) (Obli
 	}
 
 	config := ObliviousDoHConfig{
+		Version: ODOH_VERSION,
 		Contents: ObliviousDoHConfigContents{
 			KemID:          kemID,
 			KdfID:          kdfID,
