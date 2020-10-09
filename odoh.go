@@ -32,14 +32,17 @@ import (
 )
 
 const (
-	ODOH_VERSION       = uint16(0xff02)
-	ODOH_SECRET_LENGTH = 32
-	ODOH_PADDING_BYTE  = uint8(0)
-	ODOH_LABEL_KEY_ID  = "odoh key id"
-	ODOH_LABEL_KEY     = "odoh key"
-	ODOH_LABEL_NONCE   = "odoh nonce"
-	ODOH_LABEL_SECRET  = "odoh secret"
-	ODOH_LABEL_QUERY   = "odoh query"
+	ODOH_VERSION                    = uint16(0xff02)
+	ODOH_SECRET_LENGTH              = 32
+	ODOH_PADDING_BYTE               = uint8(0)
+	ODOH_LABEL_KEY_ID               = "odoh key id"
+	ODOH_LABEL_KEY                  = "odoh key"
+	ODOH_LABEL_NONCE                = "odoh nonce"
+	ODOH_LABEL_SECRET               = "odoh secret"
+	ODOH_LABEL_QUERY                = "odoh query"
+	ODOH_DEFAULT_KEMID  hpke.KEMID  = hpke.DHKEM_X25519
+	ODOH_DEFAULT_KDFID  hpke.KDFID  = hpke.KDF_HKDF_SHA256
+	ODOH_DEFAULT_AEADID hpke.AEADID = hpke.AEAD_AESGCM128
 )
 
 type ObliviousDoHConfigContents struct {
@@ -215,25 +218,21 @@ func (k ObliviousDoHConfigContents) CipherSuite() (hpke.CipherSuite, error) {
 	return hpke.AssembleCipherSuite(k.KemID, k.KdfID, k.AeadID)
 }
 
-type ObliviousDNSKeyPair struct {
+type ObliviousDoHKeyPair struct {
 	Config    ObliviousDoHConfig
-	SecretKey hpke.KEMPrivateKey
+	secretKey hpke.KEMPrivateKey
 	Seed      []byte
 }
 
-func (k ObliviousDNSKeyPair) CipherSuite() (hpke.CipherSuite, error) {
-	return hpke.AssembleCipherSuite(k.Config.Contents.KemID, k.Config.Contents.KdfID, k.Config.Contents.AeadID)
-}
-
-func DeriveFixedKeyPairFromSeed(kemID hpke.KEMID, kdfID hpke.KDFID, aeadID hpke.AEADID, ikm []byte) (ObliviousDNSKeyPair, error) {
+func CreateKeyPairFromSeed(kemID hpke.KEMID, kdfID hpke.KDFID, aeadID hpke.AEADID, ikm []byte) (ObliviousDoHKeyPair, error) {
 	suite, err := hpke.AssembleCipherSuite(kemID, kdfID, aeadID)
 	if err != nil {
-		return ObliviousDNSKeyPair{}, err
+		return ObliviousDoHKeyPair{}, err
 	}
 
 	sk, pk, err := suite.KEM.DeriveKeyPair(ikm)
 	if err != nil {
-		return ObliviousDNSKeyPair{}, err
+		return ObliviousDoHKeyPair{}, err
 	}
 
 	config := ObliviousDoHConfig{
@@ -245,20 +244,28 @@ func DeriveFixedKeyPairFromSeed(kemID hpke.KEMID, kdfID hpke.KDFID, aeadID hpke.
 		},
 	}
 
-	return ObliviousDNSKeyPair{config, sk, ikm}, nil
+	return ObliviousDoHKeyPair{
+		Config:    config,
+		secretKey: sk,
+		Seed:      ikm,
+	}, nil
 }
 
-func CreateKeyPair(kemID hpke.KEMID, kdfID hpke.KDFID, aeadID hpke.AEADID) (ObliviousDNSKeyPair, error) {
+func CreateDefaultKeyPairFromSeed(seed []byte) (ObliviousDoHKeyPair, error) {
+	return CreateKeyPairFromSeed(ODOH_DEFAULT_KEMID, ODOH_DEFAULT_KDFID, ODOH_DEFAULT_AEADID, seed)
+}
+
+func CreateKeyPair(kemID hpke.KEMID, kdfID hpke.KDFID, aeadID hpke.AEADID) (ObliviousDoHKeyPair, error) {
 	suite, err := hpke.AssembleCipherSuite(kemID, kdfID, aeadID)
 	if err != nil {
-		return ObliviousDNSKeyPair{}, err
+		return ObliviousDoHKeyPair{}, err
 	}
 
 	ikm := make([]byte, suite.KEM.PrivateKeySize())
 	rand.Reader.Read(ikm)
 	sk, pk, err := suite.KEM.DeriveKeyPair(ikm)
 	if err != nil {
-		return ObliviousDNSKeyPair{}, err
+		return ObliviousDoHKeyPair{}, err
 	}
 
 	config := ObliviousDoHConfig{
@@ -270,7 +277,11 @@ func CreateKeyPair(kemID hpke.KEMID, kdfID hpke.KDFID, aeadID hpke.AEADID) (Obli
 		},
 	}
 
-	return ObliviousDNSKeyPair{config, sk, ikm}, nil
+	return ObliviousDoHKeyPair{config, sk, ikm}, nil
+}
+
+func CreateDefaultKeyPair() (ObliviousDoHKeyPair, error) {
+	return CreateKeyPair(ODOH_DEFAULT_KEMID, ODOH_DEFAULT_KDFID, ODOH_DEFAULT_AEADID)
 }
 
 type QueryContext struct {
@@ -370,7 +381,7 @@ func validateMessagePadding(padding []byte) bool {
 	return validPadding == 1
 }
 
-func (privateKey ObliviousDNSKeyPair) DecryptQuery(message ObliviousDNSMessage) (*ObliviousDNSQuery, ResponseContext, error) {
+func (privateKey ObliviousDoHKeyPair) DecryptQuery(message ObliviousDNSMessage) (*ObliviousDNSQuery, ResponseContext, error) {
 	if message.MessageType != QueryType {
 		return nil, ResponseContext{}, errors.New("message is not a query")
 	}
@@ -384,7 +395,7 @@ func (privateKey ObliviousDNSKeyPair) DecryptQuery(message ObliviousDNSMessage) 
 	enc := message.EncryptedMessage[0:keySize]
 	ct := message.EncryptedMessage[keySize:]
 
-	ctxR, err := hpke.SetupBaseR(suite, privateKey.SecretKey, enc, []byte(ODOH_LABEL_QUERY))
+	ctxR, err := hpke.SetupBaseR(suite, privateKey.secretKey, enc, []byte(ODOH_LABEL_QUERY))
 	if err != nil {
 		return nil, ResponseContext{}, err
 	}
