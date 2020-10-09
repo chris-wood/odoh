@@ -111,7 +111,7 @@ func TestQueryEncryption(t *testing.T) {
 		Contents: targetKey,
 	}
 
-	odohKeyPair := ObliviousDNSKeyPair{targetConfig, skR, ikm}
+	odohKeyPair := ObliviousDoHKeyPair{targetConfig, skR, ikm}
 
 	dnsMessage := []byte{0x01, 0x02}
 
@@ -166,7 +166,7 @@ func Test_Sender_ODOHQueryEncryption(t *testing.T) {
 		Contents: targetKey,
 	}
 
-	odohKeyPair := ObliviousDNSKeyPair{targetConfig, skR, ikm}
+	odohKeyPair := ObliviousDoHKeyPair{targetConfig, skR, ikm}
 	symmetricKey := make([]byte, suite.AEAD.KeySize())
 	rand.Read(symmetricKey)
 
@@ -260,12 +260,12 @@ func TestFixedOdohKeyPairCreation(t *testing.T) {
 	}
 	keyPair, err := DeriveFixedKeyPairFromSeed(kemID, kdfID, aeadID, seed)
 	if err != nil {
-		t.Fatalf("Unable to derive a ObliviousDNSKeyPair")
+		t.Fatalf("Unable to derive a ObliviousDoHKeyPair")
 	}
 	for i := 0; i < 10; i++ {
 		keyPairDerived, err := DeriveFixedKeyPairFromSeed(kemID, kdfID, aeadID, seed)
 		if err != nil {
-			t.Fatalf("Unable to derive a ObliviousDNSKeyPair")
+			t.Fatalf("Unable to derive a ObliviousDoHKeyPair")
 		}
 		if !bytes.Equal(keyPairDerived.Config.Contents.Marshal(), keyPair.Config.Contents.Marshal()) {
 			t.Fatalf("Public Key Derived does not match")
@@ -481,7 +481,7 @@ func generateRandomData(n int) []byte {
 	return data
 }
 
-func generateTransaction(t *testing.T, kp ObliviousDNSKeyPair, querySize int) transactionTestVector {
+func generateTransaction(t *testing.T, kp ObliviousDoHKeyPair, querySize int) transactionTestVector {
 	mockQuery := generateRandomData(querySize)
 	mockAnswer := append(mockQuery, mockQuery...) // answer = query || query
 
@@ -522,7 +522,7 @@ func generateTestVector(t *testing.T, kem_id hpke.KEMID, kdf_id hpke.KDFID, aead
 		kdf_id:          kdf_id,
 		aead_id:         aead_id,
 		odoh_config:     kp.Config.Marshal(),
-		public_key_seed: kp.Seed,
+		public_key_seed: kp.seed,
 		key_id:          kp.Config.Contents.KeyID(),
 		transactions:    transactions,
 	}
