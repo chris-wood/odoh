@@ -53,11 +53,14 @@ func TestConfigSerialization(t *testing.T) {
 		t.Fatalf("CreateDefaultKeyPair failed")
 	}
 
+	if keyPair.Config.Version != derivedKeyPair.Config.Version {
+		t.Fatalf("Mismatched versions.")
+	}
 	if !bytes.Equal(keyPair.Config.Marshal(), derivedKeyPair.Config.Marshal()) {
 		t.Fatalf("Mismatched configs.")
 	}
 	if !bytes.Equal(keyPair.Seed, derivedKeyPair.Seed) {
-		t.Fatalf("Mismatched configs.")
+		t.Fatalf("Mismatched seeds.")
 	}
 }
 
