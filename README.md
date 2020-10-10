@@ -3,7 +3,6 @@
 [![CircleCI](https://circleci.com/gh/chris-wood/odoh.svg?style=svg)](https://circleci.com/gh/chris-wood/odoh)
 [![Coverage Status](https://coveralls.io/repos/github/chris-wood/odoh/badge.svg?branch=master)](https://coveralls.io/github/chris-wood/odoh?branch=master)
 [![GoDoc](https://godoc.org/github.com/chris-wood/odoh?status.svg)](https://godoc.org/github.com/chris-wood/odoh)
-[![Go Report Card](https://goreportcard.com/badge/github.com/chris-wood/odoh)](https://goreportcard.com/report/github.com/chris-wood/odoh)
 
 ## Test vector generation
 
