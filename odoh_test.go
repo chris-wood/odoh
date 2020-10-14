@@ -38,8 +38,6 @@ import (
 const (
 	outputTestVectorEnvironmentKey = "ODOH_TEST_VECTORS_OUT"
 	inputTestVectorEnvironmentKey  = "ODOH_TEST_VECTORS_IN"
-	numTransactions                = 2
-	baseQuerySize                  = 32
 )
 
 func TestConfigSerialization(t *testing.T) {
@@ -379,34 +377,49 @@ func mustSerializePub(suite hpke.CipherSuite, pub hpke.KEMPublicKey) string {
 
 ///////
 // Query/Response transaction test vector structure
+type rawTransactionTestVector struct {
+	Query                 string `json:"query"`
+	QueryPaddingLength    int    `json:"queryPaddingLength"`
+	Response              string `json:"response"`
+	ResponsePaddingLength int    `json:"responsePaddingLength"`
+	ObliviousQuery        string `json:"obliviousQuery"`
+	ObliviousResponse     string `json:"obliviousResponse"`
+}
+
 type transactionTestVector struct {
-	query             []byte
-	response          []byte
-	obliviousQuery    ObliviousDNSMessage
-	obliviousResponse ObliviousDNSMessage
+	query                 []byte
+	queryPaddingLength    uint16
+	response              []byte
+	responsePaddingLength uint16
+	obliviousQuery        ObliviousDNSMessage
+	obliviousResponse     ObliviousDNSMessage
 }
 
 func (etv transactionTestVector) MarshalJSON() ([]byte, error) {
-	return json.Marshal(map[string]string{
-		"query":             mustHex(etv.query),
-		"response":          mustHex(etv.response),
-		"obliviousQuery":    mustHex(etv.obliviousQuery.Marshal()),
-		"obliviousResponse": mustHex(etv.obliviousResponse.Marshal()),
+	return json.Marshal(rawTransactionTestVector{
+		Query:                 mustHex(etv.query),
+		QueryPaddingLength:    int(etv.queryPaddingLength),
+		Response:              mustHex(etv.response),
+		ResponsePaddingLength: int(etv.responsePaddingLength),
+		ObliviousQuery:        mustHex(etv.obliviousQuery.Marshal()),
+		ObliviousResponse:     mustHex(etv.obliviousResponse.Marshal()),
 	})
 }
 
 func (etv *transactionTestVector) UnmarshalJSON(data []byte) error {
-	raw := map[string]string{}
+	raw := rawTransactionTestVector{}
 	err := json.Unmarshal(data, &raw)
 	if err != nil {
 		return err
 	}
 
-	etv.query = mustUnhex(nil, raw["query"])
-	etv.response = mustUnhex(nil, raw["response"])
+	etv.query = mustUnhex(nil, raw.Query)
+	etv.queryPaddingLength = uint16(raw.QueryPaddingLength)
+	etv.response = mustUnhex(nil, raw.Response)
+	etv.responsePaddingLength = uint16(raw.ResponsePaddingLength)
 
-	obliviousQueryBytes := mustUnhex(nil, raw["obliviousQuery"])
-	obliviousResponseBytes := mustUnhex(nil, raw["obliviousResponse"])
+	obliviousQueryBytes := mustUnhex(nil, raw.ObliviousQuery)
+	obliviousResponseBytes := mustUnhex(nil, raw.ObliviousResponse)
 
 	etv.obliviousQuery, err = UnmarshalDNSMessage(obliviousQueryBytes)
 	if err != nil {
@@ -503,27 +516,43 @@ func generateRandomData(n int) []byte {
 	return data
 }
 
-func generateTransaction(t *testing.T, kp ObliviousDoHKeyPair, querySize int) transactionTestVector {
-	mockQuery := generateRandomData(querySize)
-	mockAnswer := append(mockQuery, mockQuery...) // answer = query || query
+func generateTransaction(t *testing.T, kp ObliviousDoHKeyPair, querySize int, queryPadding, responsePadding uint16) transactionTestVector {
+	publicKey := kp.Config.Contents
+
+	mockQueryData := generateRandomData(querySize)
+	mockResponseData := append(mockQueryData, mockQueryData...) // answer = query || query
+
+	mockQuery := CreateObliviousDNSQuery(mockQueryData, queryPadding)
+	mockResponse := CreateObliviousDNSResponse(mockResponseData, responsePadding)
 
 	// Run the query/response transaction
-	obliviousQuery, queryContext, err := SealQuery(mockQuery, kp.Config.Contents)
-	_, responseContext, err := kp.DecryptQuery(obliviousQuery)
+	obliviousQuery, queryContext, err := publicKey.EncryptQuery(mockQuery)
+	if err != nil {
+		t.Fatalf("Query encryption failed: %v", err)
+	}
 
-	mockResponse := CreateObliviousDNSResponse(mockAnswer, 0)
+	recoveredQuery, responseContext, err := kp.DecryptQuery(obliviousQuery)
+	if !bytes.Equal(recoveredQuery.Marshal(), mockQuery.Marshal()) {
+		t.Fatalf("Query decryption did not match plaintext value: %v", err)
+	}
+
 	obliviousResponse, err := responseContext.EncryptResponse(mockResponse)
-	response, err := queryContext.OpenAnswer(obliviousResponse)
+	if err != nil {
+		t.Fatalf("Response encryption failed: %v", err)
+	}
 
-	if err != nil || !bytes.Equal(response, mockAnswer) {
-		t.Fatalf("Decryption of the result does not match encrypted value")
+	responseData, err := queryContext.OpenAnswer(obliviousResponse)
+	if err != nil || !bytes.Equal(responseData, mockResponseData) {
+		t.Fatalf("Decryption of the result does not match encrypted value: %v", err)
 	}
 
 	return transactionTestVector{
-		query:             mockQuery,
-		obliviousQuery:    obliviousQuery,
-		response:          mockAnswer,
-		obliviousResponse: obliviousResponse,
+		query:                 mockQueryData,
+		queryPaddingLength:    queryPadding,
+		obliviousQuery:        obliviousQuery,
+		response:              mockResponseData,
+		responsePaddingLength: responsePadding,
+		obliviousResponse:     obliviousResponse,
 	}
 }
 
@@ -533,9 +562,24 @@ func generateTestVector(t *testing.T, kem_id hpke.KEMID, kdf_id hpke.KDFID, aead
 		t.Fatalf("Unable to create a Key Pair")
 	}
 
-	transactions := make([]transactionTestVector, numTransactions)
-	for i := 0; i < numTransactions; i++ {
-		transactions[i] = generateTransaction(t, kp, (i+1)*baseQuerySize)
+	queryBlockPaddingLengths := []int{0, 32, 64, 128}
+	responseBlockPaddingLengths := []int{0, 128, 256, 468}
+	queryLength := 32
+
+	transactions := make([]transactionTestVector, 0)
+	for _, queryBlockLength := range queryBlockPaddingLengths {
+		for _, responseBlockLength := range responseBlockPaddingLengths {
+			queryPadding := 0
+			if queryBlockLength > 0 {
+				queryPadding = queryBlockLength - (queryLength % queryBlockLength)
+			}
+			responsePadding := 0
+			if responseBlockLength > 0 {
+				responsePadding = responseBlockLength - ((queryLength * 2) % responseBlockLength)
+			}
+
+			transactions = append(transactions, generateTransaction(t, kp, queryLength, uint16(queryPadding), uint16(responsePadding)))
+		}
 	}
 
 	vector := testVector{
@@ -567,12 +611,12 @@ func verifyTestVector(t *testing.T, tv testVector) {
 		assertNotError(t, "Query decryption failed", err)
 		assertBytesEqual(t, "Query decryption mismatch", query.DnsMessage, transaction.query)
 
-		testResponse := CreateObliviousDNSResponse(transaction.response, 0)
+		testResponse := CreateObliviousDNSResponse(transaction.response, transaction.responsePaddingLength)
 		obliviousResponse, err := responseContext.EncryptResponse(testResponse)
 		assertNotError(t, "Response encryption failed", err)
 		assertBytesEqual(t, "Response encryption mismatch", obliviousResponse.Marshal(), transaction.obliviousResponse.Marshal())
 
-		// Extract decryption context, since we don't control the client's ephemeral key
+		// Rebuild decryption context, since we don't control the client's ephemeral key
 		queryContext := QueryContext{
 			odohSecret: responseContext.odohSecret,
 			query:      query.Marshal(),
