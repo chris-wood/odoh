@@ -388,9 +388,9 @@ type rawTransactionTestVector struct {
 
 type transactionTestVector struct {
 	query                 []byte
-	queryPaddingLength    int
+	queryPaddingLength    uint16
 	response              []byte
-	responsePaddingLength int
+	responsePaddingLength uint16
 	obliviousQuery        ObliviousDNSMessage
 	obliviousResponse     ObliviousDNSMessage
 }
@@ -398,9 +398,9 @@ type transactionTestVector struct {
 func (etv transactionTestVector) MarshalJSON() ([]byte, error) {
 	return json.Marshal(rawTransactionTestVector{
 		Query:                 mustHex(etv.query),
-		QueryPaddingLength:    etv.queryPaddingLength,
+		QueryPaddingLength:    int(etv.queryPaddingLength),
 		Response:              mustHex(etv.response),
-		ResponsePaddingLength: etv.responsePaddingLength,
+		ResponsePaddingLength: int(etv.responsePaddingLength),
 		ObliviousQuery:        mustHex(etv.obliviousQuery.Marshal()),
 		ObliviousResponse:     mustHex(etv.obliviousResponse.Marshal()),
 	})
@@ -414,9 +414,9 @@ func (etv *transactionTestVector) UnmarshalJSON(data []byte) error {
 	}
 
 	etv.query = mustUnhex(nil, raw.Query)
-	etv.queryPaddingLength = raw.QueryPaddingLength
+	etv.queryPaddingLength = uint16(raw.QueryPaddingLength)
 	etv.response = mustUnhex(nil, raw.Response)
-	etv.responsePaddingLength = raw.ResponsePaddingLength
+	etv.responsePaddingLength = uint16(raw.ResponsePaddingLength)
 
 	obliviousQueryBytes := mustUnhex(nil, raw.ObliviousQuery)
 	obliviousResponseBytes := mustUnhex(nil, raw.ObliviousResponse)
@@ -516,7 +516,7 @@ func generateRandomData(n int) []byte {
 	return data
 }
 
-func generateTransaction(t *testing.T, kp ObliviousDoHKeyPair, querySize, queryPadding, responsePadding int) transactionTestVector {
+func generateTransaction(t *testing.T, kp ObliviousDoHKeyPair, querySize int, queryPadding, responsePadding uint16) transactionTestVector {
 	publicKey := kp.Config.Contents
 
 	mockQueryData := generateRandomData(querySize)
@@ -578,7 +578,7 @@ func generateTestVector(t *testing.T, kem_id hpke.KEMID, kdf_id hpke.KDFID, aead
 				responsePadding = responseBlockLength - ((queryLength * 2) % responseBlockLength)
 			}
 
-			transactions = append(transactions, generateTransaction(t, kp, queryLength, queryPadding, responsePadding))
+			transactions = append(transactions, generateTransaction(t, kp, queryLength, uint16(queryPadding), uint16(responsePadding)))
 		}
 	}
 
