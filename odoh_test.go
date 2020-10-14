@@ -25,6 +25,7 @@ package odoh
 import (
 	"bytes"
 	"crypto/rand"
+	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -40,7 +41,7 @@ const (
 	inputTestVectorEnvironmentKey  = "ODOH_TEST_VECTORS_IN"
 )
 
-func TestConfigSerialization(t *testing.T) {
+func TestConfigDerivation(t *testing.T) {
 	keyPair, err := CreateDefaultKeyPair()
 	if err != nil {
 		t.Fatalf("CreateDefaultKeyPair failed")
@@ -106,7 +107,7 @@ func TestConfigDeserializationFailures(t *testing.T) {
 	// Encoding without full version or length
 	_, err = UnmarshalObliviousDoHConfig(serializedConfig[0:1])
 	if err == nil {
-		t.Fatalf("Failed to deserialize")
+		t.Fatalf("Failed to deserialize with insufficient length")
 	}
 
 	// Encoding with a mismatched version
@@ -121,29 +122,112 @@ func TestConfigDeserializationFailures(t *testing.T) {
 	invalidSerializedConfig = serializedConfig[:]
 	_, err = UnmarshalObliviousDoHConfig(invalidSerializedConfig[0:4])
 	if err == nil {
-		t.Fatalf("Failed to deserialize with insufficient length")
+		t.Fatalf("Failed to deserialize with insufficient contents length")
 	}
 }
 
-func TestConfigDerivation(t *testing.T) {
-	keyPair, err := CreateDefaultKeyPair()
+func createDefaultSerializedPublicKey(t *testing.T) []byte {
+	suite, err := hpke.AssembleCipherSuite(ODOH_DEFAULT_KEMID, ODOH_DEFAULT_KDFID, ODOH_DEFAULT_AEADID)
 	if err != nil {
-		t.Fatalf("CreateDefaultKeyPair failed")
+		t.Fatalf("Failed generating HPKE suite")
 	}
 
-	derivedKeyPair, err := CreateDefaultKeyPairFromSeed(keyPair.Seed)
+	ikm := make([]byte, suite.KEM.PrivateKeySize())
+	_, _ = rand.Read(ikm)
+	_, publicKey, err := suite.KEM.DeriveKeyPair(ikm)
 	if err != nil {
-		t.Fatalf("CreateDefaultKeyPair failed")
+		t.Fatalf("Failed generating public key")
 	}
 
-	if keyPair.Config.Version != derivedKeyPair.Config.Version {
-		t.Fatalf("Mismatched versions.")
+	return suite.KEM.Serialize(publicKey)
+}
+
+func validateSerializedContents(t *testing.T, configContents ObliviousDoHConfigContents, serializedContents []byte) {
+	kemId := binary.BigEndian.Uint16(serializedContents[0:])
+	kdfId := binary.BigEndian.Uint16(serializedContents[2:])
+	aeadId := binary.BigEndian.Uint16(serializedContents[4:])
+	publicKeyLength := int(binary.BigEndian.Uint16(serializedContents[6:]))
+
+	if kemId != uint16(ODOH_DEFAULT_KEMID) {
+		t.Fatalf("Invalid serialized KEMID. Expected %v, got %v.", ODOH_DEFAULT_KEMID, kemId)
 	}
-	if !bytes.Equal(keyPair.Config.Marshal(), derivedKeyPair.Config.Marshal()) {
-		t.Fatalf("Mismatched configs.")
+	if kdfId != uint16(ODOH_DEFAULT_KDFID) {
+		t.Fatalf("Invalid serialized KDFID. Expected %v, got %v.", ODOH_DEFAULT_KDFID, kdfId)
 	}
-	if !bytes.Equal(keyPair.Seed, derivedKeyPair.Seed) {
-		t.Fatalf("Mismatched seeds.")
+	if aeadId != uint16(ODOH_DEFAULT_AEADID) {
+		t.Fatalf("Invalid serialized AEADID. Expected %v, got %v.", ODOH_DEFAULT_AEADID, aeadId)
+	}
+	if publicKeyLength != len(configContents.PublicKeyBytes) {
+		t.Fatalf("Invalid serialized public key length. Expected %v, got %v.", len(configContents.PublicKeyBytes), publicKeyLength)
+	}
+	if !bytes.Equal(configContents.PublicKeyBytes, serializedContents[8:8+publicKeyLength]) {
+		t.Fatalf("Invalid bytes serialized. Expected %x, got %x", configContents.PublicKeyBytes, serializedContents[8:8+publicKeyLength])
+	}
+}
+
+func TestConfigContentsSerialization(t *testing.T) {
+	publicKeyBytes := createDefaultSerializedPublicKey(t)
+	configContents, err := CreateObliviousDoHConfigContents(ODOH_DEFAULT_KEMID, ODOH_DEFAULT_KDFID, ODOH_DEFAULT_AEADID, publicKeyBytes)
+	if err != nil {
+		t.Fatalf("CreateObliviousDoHConfigContents failed: %v", err)
+	}
+
+	serializedContents := configContents.Marshal()
+	if len(serializedContents) != 8+len(publicKeyBytes) {
+		t.Fatalf("Invalid length of serialized ObliviousDoHConfigContents. Expected %v, got %v.", 8+len(publicKeyBytes), len(serializedContents))
+	}
+
+	validateSerializedContents(t, configContents, serializedContents)
+
+	serializedContents = append(serializedContents, 0x00)
+	validateSerializedContents(t, configContents, serializedContents)
+}
+
+func TestConfigContentsDeserialization(t *testing.T) {
+	publicKeyBytes := createDefaultSerializedPublicKey(t)
+	configContents, err := CreateObliviousDoHConfigContents(ODOH_DEFAULT_KEMID, ODOH_DEFAULT_KDFID, ODOH_DEFAULT_AEADID, publicKeyBytes)
+	if err != nil {
+		t.Fatalf("CreateObliviousDoHConfigContents failed: %v", err)
+	}
+
+	serializedContents := configContents.Marshal()
+
+	_, err = UnmarshalObliviousDoHConfigContents(serializedContents[0:7])
+	if err == nil {
+		t.Fatalf("Failed to deserialize with insufficient length")
+	}
+
+	_, err = UnmarshalObliviousDoHConfigContents(serializedContents[0:8])
+	if err == nil {
+		t.Fatalf("Failed to deserialize with insufficient public key length")
+	}
+
+	invalidSerializedConfig := serializedContents[:]
+	invalidSerializedConfig[0] = invalidSerializedConfig[0] ^ 0xFF
+	_, err = UnmarshalObliviousDoHConfigContents(invalidSerializedConfig)
+	if err == nil {
+		t.Fatalf("Failed to deserialize with invalid KEMID")
+	}
+
+	invalidSerializedConfig = serializedContents[:]
+	invalidSerializedConfig[2] = invalidSerializedConfig[2] ^ 0xFF
+	_, err = UnmarshalObliviousDoHConfigContents(invalidSerializedConfig)
+	if err == nil {
+		t.Fatalf("Failed to deserialize with invalid KDFID")
+	}
+
+	invalidSerializedConfig = serializedContents[:]
+	invalidSerializedConfig[4] = invalidSerializedConfig[4] ^ 0xFF
+	_, err = UnmarshalObliviousDoHConfigContents(invalidSerializedConfig)
+	if err == nil {
+		t.Fatalf("Failed to deserialize with invalid AEADID")
+	}
+
+	invalidSerializedConfig = serializedContents[:]
+	invalidSerializedConfig[7] = 0x1F // instead of 0x20, for x25519 public keys
+	_, err = UnmarshalObliviousDoHConfigContents(invalidSerializedConfig[0 : len(invalidSerializedConfig)-1])
+	if err == nil {
+		t.Fatalf("Failed to deserialize with invalid x25519 public key")
 	}
 }
 

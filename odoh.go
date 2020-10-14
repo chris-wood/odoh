@@ -172,6 +172,16 @@ func UnmarshalObliviousDoHConfigContents(buffer []byte) (ObliviousDoHConfigConte
 		return ObliviousDoHConfigContents{}, errors.New(fmt.Sprintf("Unsupported AEADID: %04x", aeadId))
 	}
 
+	suite, err := hpke.AssembleCipherSuite(KemID, KdfID, AeadID)
+	if err != nil {
+		return ObliviousDoHConfigContents{}, errors.New(fmt.Sprintf("Unsupported HPKE ciphersuite"))
+	}
+
+	_, err = suite.KEM.Deserialize(publicKeyBytes)
+	if err != nil {
+		return ObliviousDoHConfigContents{}, errors.New(fmt.Sprintf("Invalid HPKE public key bytes"))
+	}
+
 	return ObliviousDoHConfigContents{
 		KemID:          KemID,
 		KdfID:          KdfID,
