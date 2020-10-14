@@ -27,8 +27,8 @@ import (
 	"crypto/subtle"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"github.com/cisco/go-hpke"
-	"log"
 )
 
 const (
@@ -71,44 +71,6 @@ func CreateObliviousDoHConfigContents(kemID hpke.KEMID, kdfID hpke.KDFID, aeadID
 	}, nil
 }
 
-type ObliviousDoHConfig struct {
-	Version  uint16
-	Contents ObliviousDoHConfigContents
-}
-
-func CreateObliviousDoHConfig(contents ObliviousDoHConfigContents) ObliviousDoHConfig {
-	return ObliviousDoHConfig{
-		Version:  ODOH_VERSION,
-		Contents: contents,
-	}
-}
-
-func (c ObliviousDoHConfig) Marshal() []byte {
-	marshalledConfig := c.Contents.Marshal()
-
-	buffer := make([]byte, 4)
-	binary.BigEndian.PutUint16(buffer[0:], uint16(c.Version))
-	binary.BigEndian.PutUint16(buffer[2:], uint16(len(marshalledConfig)))
-
-	configBytes := append(buffer, marshalledConfig...)
-	return configBytes
-}
-
-func UnmarshalObliviousDoHConfig(buffer []byte) (ObliviousDoHConfig, error) {
-	version := binary.BigEndian.Uint16(buffer[0:])
-	length := binary.BigEndian.Uint16(buffer[2:])
-	if len(buffer[4:]) < int(length) {
-		return ObliviousDoHConfig{}, errors.New("Invalid serialized ObliviousDoHConfig")
-	}
-
-	configContents := UnmarshalObliviousDoHConfigContents(buffer[4:])
-
-	return ObliviousDoHConfig{
-		Version:  version,
-		Contents: configContents,
-	}, nil
-}
-
 func (k ObliviousDoHConfigContents) KeyID() []byte {
 	suite, err := hpke.AssembleCipherSuite(k.KemID, k.KdfID, k.AeadID)
 	if err != nil {
@@ -139,13 +101,21 @@ func (k ObliviousDoHConfigContents) Marshal() []byte {
 	return response
 }
 
-func UnmarshalObliviousDoHConfigContents(buffer []byte) ObliviousDoHConfigContents {
+func UnmarshalObliviousDoHConfigContents(buffer []byte) (ObliviousDoHConfigContents, error) {
+	if len(buffer) < 8 {
+		return ObliviousDoHConfigContents{}, errors.New("Invalid serialized ObliviousDoHConfigContents")
+	}
+
 	kemId := binary.BigEndian.Uint16(buffer[0:])
 	kdfId := binary.BigEndian.Uint16(buffer[2:])
-	AeadId := binary.BigEndian.Uint16(buffer[4:])
-	pkLen := binary.BigEndian.Uint16(buffer[6:])
+	aeadId := binary.BigEndian.Uint16(buffer[4:])
+	publicKeyLength := binary.BigEndian.Uint16(buffer[6:])
 
-	pkBytes := buffer[8 : 8+pkLen]
+	if len(buffer[8:]) < int(publicKeyLength) {
+		return ObliviousDoHConfigContents{}, errors.New("Invalid serialized ObliviousDoHConfigContents")
+	}
+
+	publicKeyBytes := buffer[8 : 8+publicKeyLength]
 
 	var KemID hpke.KEMID
 	var KdfID hpke.KDFID
@@ -171,7 +141,7 @@ func UnmarshalObliviousDoHConfigContents(buffer []byte) ObliviousDoHConfigConten
 		KemID = hpke.KEM_SIKE751
 		break
 	default:
-		log.Fatalln("Unable to find the correct KEM ID Type")
+		return ObliviousDoHConfigContents{}, errors.New(fmt.Sprintf("Unsupported KEMID: %04x", kemId))
 	}
 
 	switch kdfId {
@@ -185,10 +155,10 @@ func UnmarshalObliviousDoHConfigContents(buffer []byte) ObliviousDoHConfigConten
 		KdfID = hpke.KDF_HKDF_SHA512
 		break
 	default:
-		log.Fatalln("Unable to find correct KDF ID Type")
+		return ObliviousDoHConfigContents{}, errors.New(fmt.Sprintf("Unsupported KDFID: %04x", kdfId))
 	}
 
-	switch AeadId {
+	switch aeadId {
 	case 0x0001:
 		AeadID = hpke.AEAD_AESGCM128
 		break
@@ -199,15 +169,15 @@ func UnmarshalObliviousDoHConfigContents(buffer []byte) ObliviousDoHConfigConten
 		AeadID = hpke.AEAD_CHACHA20POLY1305
 		break
 	default:
-		log.Fatalln("Unable to find correct AEAD ID Type")
+		return ObliviousDoHConfigContents{}, errors.New(fmt.Sprintf("Unsupported AEADID: %04x", aeadId))
 	}
 
 	return ObliviousDoHConfigContents{
 		KemID:          KemID,
 		KdfID:          KdfID,
 		AeadID:         AeadID,
-		PublicKeyBytes: pkBytes,
-	}
+		PublicKeyBytes: publicKeyBytes,
+	}, nil
 }
 
 func (k ObliviousDoHConfigContents) PublicKey() []byte {
@@ -216,6 +186,55 @@ func (k ObliviousDoHConfigContents) PublicKey() []byte {
 
 func (k ObliviousDoHConfigContents) CipherSuite() (hpke.CipherSuite, error) {
 	return hpke.AssembleCipherSuite(k.KemID, k.KdfID, k.AeadID)
+}
+
+type ObliviousDoHConfig struct {
+	Version  uint16
+	Contents ObliviousDoHConfigContents
+}
+
+func CreateObliviousDoHConfig(contents ObliviousDoHConfigContents) ObliviousDoHConfig {
+	return ObliviousDoHConfig{
+		Version:  ODOH_VERSION,
+		Contents: contents,
+	}
+}
+
+func (c ObliviousDoHConfig) Marshal() []byte {
+	marshalledConfig := c.Contents.Marshal()
+
+	buffer := make([]byte, 4)
+	binary.BigEndian.PutUint16(buffer[0:], uint16(c.Version))
+	binary.BigEndian.PutUint16(buffer[2:], uint16(len(marshalledConfig)))
+
+	configBytes := append(buffer, marshalledConfig...)
+	return configBytes
+}
+
+func UnmarshalObliviousDoHConfig(buffer []byte) (ObliviousDoHConfig, error) {
+	if len(buffer) < 4 {
+		return ObliviousDoHConfig{}, errors.New("Invalid ObliviousDoHConfig encoding")
+	}
+
+	version := binary.BigEndian.Uint16(buffer[0:])
+	if version != ODOH_VERSION {
+		return ObliviousDoHConfig{}, errors.New(fmt.Sprintf("Unsupported version: %04x", version))
+	}
+
+	length := binary.BigEndian.Uint16(buffer[2:])
+	if len(buffer[4:]) < int(length) {
+		return ObliviousDoHConfig{}, errors.New(fmt.Sprintf("Invalid serialized ObliviousDoHConfig, expected %v bytes, got %v", length, len(buffer[4:])))
+	}
+
+	configContents, err := UnmarshalObliviousDoHConfigContents(buffer[4:])
+	if err != nil {
+		return ObliviousDoHConfig{}, err
+	}
+
+	return ObliviousDoHConfig{
+		Version:  version,
+		Contents: configContents,
+	}, nil
 }
 
 type ObliviousDoHKeyPair struct {
@@ -235,15 +254,12 @@ func CreateKeyPairFromSeed(kemID hpke.KEMID, kdfID hpke.KDFID, aeadID hpke.AEADI
 		return ObliviousDoHKeyPair{}, err
 	}
 
-	config := ObliviousDoHConfig{
-		Version: ODOH_VERSION,
-		Contents: ObliviousDoHConfigContents{
-			KemID:          kemID,
-			KdfID:          kdfID,
-			AeadID:         aeadID,
-			PublicKeyBytes: suite.KEM.Serialize(pk),
-		},
+	configContents, err := CreateObliviousDoHConfigContents(kemID, kdfID, aeadID, suite.KEM.Serialize(pk))
+	if err != nil {
+		return ObliviousDoHKeyPair{}, err
 	}
+
+	config := CreateObliviousDoHConfig(configContents)
 
 	return ObliviousDoHKeyPair{
 		Config:    config,
@@ -269,17 +285,18 @@ func CreateKeyPair(kemID hpke.KEMID, kdfID hpke.KDFID, aeadID hpke.AEADID) (Obli
 		return ObliviousDoHKeyPair{}, err
 	}
 
-	config := ObliviousDoHConfig{
-		Version: ODOH_VERSION,
-		Contents: ObliviousDoHConfigContents{
-			KemID:          kemID,
-			KdfID:          kdfID,
-			AeadID:         aeadID,
-			PublicKeyBytes: suite.KEM.Serialize(pk),
-		},
+	configContents, err := CreateObliviousDoHConfigContents(kemID, kdfID, aeadID, suite.KEM.Serialize(pk))
+	if err != nil {
+		return ObliviousDoHKeyPair{}, err
 	}
 
-	return ObliviousDoHKeyPair{config, sk, ikm}, nil
+	config := CreateObliviousDoHConfig(configContents)
+
+	return ObliviousDoHKeyPair{
+		Config:    config,
+		secretKey: sk,
+		Seed:      ikm,
+	}, nil
 }
 
 func CreateDefaultKeyPair() (ObliviousDoHKeyPair, error) {

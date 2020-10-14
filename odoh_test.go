@@ -64,6 +64,91 @@ func TestConfigSerialization(t *testing.T) {
 	}
 }
 
+func TestConfigDeserialization(t *testing.T) {
+	keyPair, err := CreateDefaultKeyPair()
+	if err != nil {
+		t.Fatalf("CreateDefaultKeyPair failed")
+	}
+
+	serializedConfig := keyPair.Config.Marshal()
+
+	recoveredConfig, err := UnmarshalObliviousDoHConfig(serializedConfig)
+	if err != nil {
+		t.Fatalf("Failed deserializing config")
+	}
+	if recoveredConfig.Version != keyPair.Config.Version {
+		t.Fatalf("Mismatched versions.")
+	}
+	if !bytes.Equal(keyPair.Config.Marshal(), recoveredConfig.Marshal()) {
+		t.Fatalf("Mismatched configs.")
+	}
+
+	serializedConfig = append(serializedConfig, 0x00) // append an extra byte
+
+	recoveredConfig, err = UnmarshalObliviousDoHConfig(serializedConfig)
+	if err != nil {
+		t.Fatalf("Failed deserializing config")
+	}
+	if recoveredConfig.Version != keyPair.Config.Version {
+		t.Fatalf("Mismatched versions.")
+	}
+	if !bytes.Equal(keyPair.Config.Marshal(), recoveredConfig.Marshal()) {
+		t.Fatalf("Mismatched configs.")
+	}
+}
+
+func TestConfigDeserializationFailures(t *testing.T) {
+	keyPair, err := CreateDefaultKeyPair()
+	if err != nil {
+		t.Fatalf("CreateDefaultKeyPair failed")
+	}
+
+	serializedConfig := keyPair.Config.Marshal()
+
+	// Encoding without full version or length
+	_, err = UnmarshalObliviousDoHConfig(serializedConfig[0:1])
+	if err == nil {
+		t.Fatalf("Failed to deserialize")
+	}
+
+	// Encoding with a mismatched version
+	invalidSerializedConfig := serializedConfig[:]
+	invalidSerializedConfig[0] = invalidSerializedConfig[0] ^ 0xFF
+	_, err = UnmarshalObliviousDoHConfig(invalidSerializedConfig)
+	if err == nil {
+		t.Fatalf("Failed to deserialize with invalid version")
+	}
+
+	// Encoding with an invalid length
+	invalidSerializedConfig = serializedConfig[:]
+	_, err = UnmarshalObliviousDoHConfig(invalidSerializedConfig[0:4])
+	if err == nil {
+		t.Fatalf("Failed to deserialize with insufficient length")
+	}
+}
+
+func TestConfigDerivation(t *testing.T) {
+	keyPair, err := CreateDefaultKeyPair()
+	if err != nil {
+		t.Fatalf("CreateDefaultKeyPair failed")
+	}
+
+	derivedKeyPair, err := CreateDefaultKeyPairFromSeed(keyPair.Seed)
+	if err != nil {
+		t.Fatalf("CreateDefaultKeyPair failed")
+	}
+
+	if keyPair.Config.Version != derivedKeyPair.Config.Version {
+		t.Fatalf("Mismatched versions.")
+	}
+	if !bytes.Equal(keyPair.Config.Marshal(), derivedKeyPair.Config.Marshal()) {
+		t.Fatalf("Mismatched configs.")
+	}
+	if !bytes.Equal(keyPair.Seed, derivedKeyPair.Seed) {
+		t.Fatalf("Mismatched seeds.")
+	}
+}
+
 func TestQueryBodyMarshal(t *testing.T) {
 	message := []byte{0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F}
 
@@ -248,7 +333,10 @@ func TestOdohPublicKeyMarshalUnmarshal(t *testing.T) {
 	}
 
 	serializedPublicKey := targetKey.Marshal()
-	deserializedPublicKey := UnmarshalObliviousDoHConfigContents(serializedPublicKey)
+	deserializedPublicKey, err := UnmarshalObliviousDoHConfigContents(serializedPublicKey)
+	if err != nil {
+		t.Fatalf("UnmarshalObliviousDoHConfigContents failed: %v", err)
+	}
 
 	if !bytes.Equal(deserializedPublicKey.PublicKeyBytes, targetKey.PublicKeyBytes) {
 		t.Fatalf("The deserialized and serialized bytes do not match.")
