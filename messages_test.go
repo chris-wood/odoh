@@ -78,7 +78,7 @@ func TestObliviousDoHQueryNoPaddingMarshal(t *testing.T) {
 func TestObliviousDoHQueryPaddingMarshal(t *testing.T) {
 	dnsMessage := []byte{0x06, 0x07, 0x08, 0x09}
 
-	paddingLength := 8
+	paddingLength := uint16(8)
 	paddedBytes := make([]byte, paddingLength)
 	query := CreateObliviousDNSQuery(dnsMessage, paddingLength)
 
