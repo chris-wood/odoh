@@ -148,7 +148,7 @@ func TestConfigsDeserialization(t *testing.T) {
 	configs := CreateObliviousDoHConfigs(configSet)
 
 	serializedConfigA := keyPairA.Config.Marshal()
-	serializedConfigB := keyPairA.Config.Marshal()
+	serializedConfigB := keyPairB.Config.Marshal()
 	serializedConfigs := configs.Marshal()
 
 	if len(serializedConfigs) != 2+len(serializedConfigA)+len(serializedConfigB) {
