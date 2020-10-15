@@ -126,6 +126,80 @@ func TestConfigDeserializationFailures(t *testing.T) {
 	}
 }
 
+func mustCreateDefaultKeyPair(t *testing.T) ObliviousDoHKeyPair {
+	keyPair, err := CreateDefaultKeyPair()
+	if err != nil {
+		t.Fatalf("CreateDefaultKeyPair failed")
+	}
+	return keyPair
+}
+
+func copySlice(src []byte) []byte {
+	copied := make([]byte, len(src))
+	copy(copied, src)
+	return copied
+}
+
+func TestConfigsDeserialization(t *testing.T) {
+	keyPairA := mustCreateDefaultKeyPair(t)
+	keyPairB := mustCreateDefaultKeyPair(t)
+
+	configSet := []ObliviousDoHConfig{keyPairA.Config, keyPairB.Config}
+	configs := CreateObliviousDoHConfigs(configSet)
+
+	serializedConfigA := keyPairA.Config.Marshal()
+	serializedConfigB := keyPairA.Config.Marshal()
+	serializedConfigs := configs.Marshal()
+
+	if len(serializedConfigs) != 2+len(serializedConfigA)+len(serializedConfigB) {
+		t.Fatalf("Invalid serialized length. Expected %v, got %v", 2+len(serializedConfigA)+len(serializedConfigB), len(serializedConfigs))
+	}
+
+	_, err := UnmarshalObliviousDoHConfigs(serializedConfigs)
+	if err != nil {
+		t.Fatalf("UnmarshalObliviousDoHConfigs failed: %v", err)
+	}
+
+	longSerializedConfigs := append(serializedConfigs, 0x00)
+	_, err = UnmarshalObliviousDoHConfigs(longSerializedConfigs)
+	if err != nil {
+		t.Fatalf("UnmarshalObliviousDoHConfigs failed: %v", err)
+	}
+
+	invalidSerializedConfigs := copySlice(serializedConfigs)
+	deserializedConfigs, err := UnmarshalObliviousDoHConfigs(invalidSerializedConfigs[0 : len(invalidSerializedConfigs)-1])
+	if err != nil {
+		t.Fatalf("UnmarshalObliviousDoHConfigs failed to parse first config")
+	}
+	if len(deserializedConfigs.Configs) != 1 {
+		t.Fatalf("UnmarshalObliviousDoHConfigs parsed more than one ObliviousDoHConfig elements, got %v", len(deserializedConfigs.Configs))
+	}
+
+	invalidSerializedConfigs = copySlice(serializedConfigs)
+	invalidSerializedConfigs[0] = 0xFF // Invalidate the outer vector length
+	_, err = UnmarshalObliviousDoHConfigs(invalidSerializedConfigs)
+	if err == nil {
+		t.Fatalf("UnmarshalObliviousDoHConfigs succeeded without enough bytes")
+	}
+
+	invalidSerializedConfigs = copySlice(serializedConfigs)
+	invalidSerializedConfigs[2] ^= 0xFF // Flip the version value
+	deserializedConfigs, err = UnmarshalObliviousDoHConfigs(invalidSerializedConfigs)
+	if err != nil {
+		t.Fatalf("UnmarshalObliviousDoHConfigs failed to parse one of the valid configs: %v", err)
+	}
+	if len(deserializedConfigs.Configs) != 1 {
+		t.Fatalf("UnmarshalObliviousDoHConfigs parsed more than one ObliviousDoHConfig elements, got %v", len(deserializedConfigs.Configs))
+	}
+
+	invalidSerializedConfigs = copySlice(serializedConfigs)
+	invalidSerializedConfigs[4] = 0xFF // Extend the length of the first config
+	_, err = UnmarshalObliviousDoHConfigs(invalidSerializedConfigs)
+	if err == nil {
+		t.Fatalf("UnmarshalObliviousDoHConfigs succeeded without enough bytes")
+	}
+}
+
 func createDefaultSerializedPublicKey(t *testing.T) []byte {
 	suite, err := hpke.AssembleCipherSuite(ODOH_DEFAULT_KEMID, ODOH_DEFAULT_KDFID, ODOH_DEFAULT_AEADID)
 	if err != nil {
