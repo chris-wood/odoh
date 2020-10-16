@@ -1,4 +1,4 @@
-# [Oblivious DoH Library](https://tools.ietf.org/html/draft-pauly-dprive-oblivious-doh)
+# [Oblivious DoH](https://tools.ietf.org/html/draft-pauly-dprive-oblivious-doh)
 
 [![CircleCI](https://circleci.com/gh/chris-wood/odoh.svg?style=svg)](https://circleci.com/gh/chris-wood/odoh)
 [![Coverage Status](https://coveralls.io/repos/github/chris-wood/odoh/badge.svg?branch=master)](https://coveralls.io/github/chris-wood/odoh?branch=master)
