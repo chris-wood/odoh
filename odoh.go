@@ -221,17 +221,29 @@ func (c ObliviousDoHConfig) Marshal() []byte {
 	return configBytes
 }
 
-func UnmarshalObliviousDoHConfig(buffer []byte) (ObliviousDoHConfig, error) {
+func parseConfigHeader(buffer []byte) (uint16, uint16, error) {
 	if len(buffer) < 4 {
-		return ObliviousDoHConfig{}, errors.New("Invalid ObliviousDoHConfig encoding")
+		return uint16(0), uint16(0), errors.New("Invalid ObliviousDoHConfig encoding")
 	}
 
 	version := binary.BigEndian.Uint16(buffer[0:])
-	if version != ODOH_VERSION {
-		return ObliviousDoHConfig{}, errors.New(fmt.Sprintf("Unsupported version: %04x", version))
+	length := binary.BigEndian.Uint16(buffer[2:])
+	return version, length, nil
+}
+
+func isSupportedConfigVersion(version uint16) bool {
+	return version == ODOH_VERSION
+}
+
+func UnmarshalObliviousDoHConfig(buffer []byte) (ObliviousDoHConfig, error) {
+	version, length, err := parseConfigHeader(buffer)
+	if err != nil {
+		return ObliviousDoHConfig{}, err
 	}
 
-	length := binary.BigEndian.Uint16(buffer[2:])
+	if !isSupportedConfigVersion(version) {
+		return ObliviousDoHConfig{}, errors.New(fmt.Sprintf("Unsupported version: %04x", version))
+	}
 	if len(buffer[4:]) < int(length) {
 		return ObliviousDoHConfig{}, errors.New(fmt.Sprintf("Invalid serialized ObliviousDoHConfig, expected %v bytes, got %v", length, len(buffer[4:])))
 	}
@@ -245,6 +257,68 @@ func UnmarshalObliviousDoHConfig(buffer []byte) (ObliviousDoHConfig, error) {
 		Version:  version,
 		Contents: configContents,
 	}, nil
+}
+
+type ObliviousDoHConfigs struct {
+	Configs []ObliviousDoHConfig
+}
+
+func CreateObliviousDoHConfigs(configs []ObliviousDoHConfig) ObliviousDoHConfigs {
+	return ObliviousDoHConfigs{
+		Configs: configs,
+	}
+}
+
+func (c ObliviousDoHConfigs) Marshal() []byte {
+	serializedConfigs := make([]byte, 0)
+	for _, config := range c.Configs {
+		serializedConfigs = append(serializedConfigs, config.Marshal()...)
+	}
+
+	buffer := make([]byte, 2)
+	binary.BigEndian.PutUint16(buffer[0:], uint16(len(serializedConfigs)))
+
+	result := append(buffer, serializedConfigs...)
+	return result
+}
+
+func UnmarshalObliviousDoHConfigs(buffer []byte) (ObliviousDoHConfigs, error) {
+	if len(buffer) < 2 {
+		return ObliviousDoHConfigs{}, errors.New("Invalid ObliviousDoHConfigs encoding")
+	}
+
+	configs := make([]ObliviousDoHConfig, 0)
+	length := binary.BigEndian.Uint16(buffer[0:])
+	offset := uint16(2)
+
+	for {
+		configVersion, configLength, err := parseConfigHeader(buffer[offset:])
+		if err != nil {
+			return ObliviousDoHConfigs{}, errors.New("Invalid ObliviousDoHConfigs encoding")
+		}
+
+		if uint16(len(buffer[offset:])) < configLength {
+			// The configs vector is encoded incorrectly, so discard the whole thing
+			return ObliviousDoHConfigs{}, errors.New(fmt.Sprintf("Invalid serialized ObliviousDoHConfig, expected %v bytes, got %v", length, len(buffer[offset:])))
+		}
+
+		if isSupportedConfigVersion(configVersion) {
+			config, err := UnmarshalObliviousDoHConfig(buffer[offset:])
+			if err == nil {
+				configs = append(configs, config)
+			}
+		} else {
+			// Skip over unsupported versions
+		}
+
+		offset += 4 + configLength
+		if offset >= 2+length {
+			// Stop reading
+			break
+		}
+	}
+
+	return CreateObliviousDoHConfigs(configs), nil
 }
 
 type ObliviousDoHKeyPair struct {
