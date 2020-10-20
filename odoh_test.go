@@ -896,7 +896,7 @@ func verifyTestVectors(t *testing.T, vectorString []byte, subtest bool) {
 		if !subtest {
 			test(t)
 		} else {
-			label := fmt.Sprintf("config=%x", tv.odoh_configs)
+			label := fmt.Sprintf("odohconfigs=%x", tv.odoh_configs)
 			t.Run(label, test)
 		}
 	}
